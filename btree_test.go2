@@ -1,0 +1,39 @@
+package btree
+
+import (
+	"fmt"
+	"testing"
+)
+
+type noopAug(type T Item) struct{}
+
+func (a *noopAug(T)) Clone() noopAug(T) {
+	return noopAug(T){}
+}
+
+func (a *noopAug(T)) Update(n Node(T, *noopAug(T))) {
+}
+
+func (a *noopAug(T))  UpdateOnInsert(item T, child Node(T, *noopAug(T))) (updated bool) {
+	return false
+}
+func (a *noopAug(T))  UpdateOnRemoval(item T, child Node(T, *noopAug(T))) (updated bool) {
+	return false
+}
+
+type Int int
+
+func (i Int) Less(o Int) bool {
+	return i < o
+}
+
+func TestBTree(t *testing.T) {
+	var tree btree(Int, noopAug(Int))
+	tree.Set(2)
+	tree.Set(1)
+	iter := tree.MakeIter()
+	iter.First()
+	fmt.Println(iter.Cur())
+	iter.Next()
+	fmt.Println(iter.Cur())
+}
