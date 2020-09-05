@@ -1,0 +1,80 @@
+package btree
+
+type Interval[type T Item, I any] interface {
+	type I
+	Item[I]
+	Key() T
+	End() T
+}
+
+type intervalAug[type T Item, I Interval[T, I]] struct{}
+
+func (a *intervalAug[T, I]) Clone() intervalAug[T, I] {
+	return intervalAug[T, I]{}
+}
+
+func (a *intervalAug[T, I]) Update(n Node[I, *intervalAug[T, I]]) {
+}
+
+func (a *intervalAug[T, I]) UpdateOnInsert(
+	item I,
+	n, child Node[I, *intervalAug[T, I]],
+) (updated bool) {
+	return false
+}
+
+func (a *intervalAug[T, I]) UpdateOnRemoval(
+	item I,
+	n, child Node[I, *intervalAug[T, I]],
+) (updated bool) {
+	return false
+}
+
+type IntervalTree[type T Item, I Interval[T, I]] struct {
+	t AugBTree[I, intervalAug[T, I]]
+}
+
+func MakeIntervalTree[type T Item, I Interval[T, I]]() IntervalTree[T, I] {
+	return IntervalTree[T, I]{
+		AugBTree[I, intervalAug[T, I]]{},
+	}
+}
+
+func (t *IntervalTree[T, I]) Set(v I) {
+	t.t.Set(v)
+}
+
+type IntervalIterator[type T Item, I Interval[T, I]] struct {
+	it Iterator[I, intervalAug[T, I]]
+
+	// The "soft" lower-bound constraint.
+	constrMinN       Node[I, intervalAug[T, I]]
+	constrMinPos     int16
+	constrMinReached bool
+
+	// The "hard" upper-bound constraint.
+	constrMaxN   Node[I, intervalAug[T, I]]
+	constrMaxPos int16
+}
+
+func (t *IntervalTree[T, I]) MakeIter() IntervalIterator[T, I] {
+	return IntervalIterator[T, I]{
+		it: t.t.MakeIter(),
+	}
+}
+
+func (it *IntervalIterator[T, I]) First() {
+	it.it.First()
+}
+
+func (it *IntervalIterator[T, I]) Next() {
+	it.it.Next()
+}
+
+func (it *IntervalIterator[T, I]) Valid() bool {
+	return it.it.Valid()
+}
+
+func (it *IntervalIterator[T, I]) Cur() I {
+	return I(it.it.Cur())
+}

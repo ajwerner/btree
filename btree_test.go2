@@ -1,28 +1,8 @@
 package btree
 
 import (
-	"fmt"
 	"testing"
 )
-
-type noopAug[type T Item] struct{}
-
-func (a *noopAug[T]) Clone() noopAug[T] {
-	return noopAug[T]{}
-}
-
-func (a *noopAug[T]) Update(n Node[T, *noopAug[T]]) {
-	fmt.Printf("%T %T\n", n, n.GetA())
-}
-
-func (a *noopAug[T]) UpdateOnInsert(item T, n, child Node[T, *noopAug[T]]) (updated bool) {
-	fmt.Printf("%T %T\n", n, n.GetA())
-	return false
-}
-func (a *noopAug[T]) UpdateOnRemoval(item T, n, child Node[T, *noopAug[T]]) (updated bool) {
-	fmt.Printf("%T %T\n", n, n.GetA())
-	return false
-}
 
 type Int int
 
@@ -31,12 +11,20 @@ func (i Int) Less(o Int) bool {
 }
 
 func TestBTree(t *testing.T) {
-	var tree btree[Int, noopAug[Int]]
+	assertEq := func(t *testing.T, exp, got Int) {
+		t.Helper()
+		if exp != got {
+			t.Fatalf("expected %d, got %d", exp, got)
+		}
+	}
+	tree := MakeBTree[Int]()
 	tree.Set(2)
+	tree.Set(12)
 	tree.Set(1)
 	iter := tree.MakeIter()
 	iter.First()
-	fmt.Println(iter.Cur())
-	iter.Next()
-	fmt.Println(iter.Cur())
+	for _, exp := range []Int{1, 2, 12} {
+		assertEq(t, exp, iter.Cur())
+		iter.Next()
+	}
 }
