@@ -631,7 +631,7 @@ func (t *AugBTree[T, A, AP]) Clone() *AugBTree[T, A, AP] {
 }
 
 // Delete removes an item equal to the passed in item from the tree.
-func (t AugBTree[T, A, AP]) Delete(item T) {
+func (t *AugBTree[T, A, AP]) Delete(item T) {
 	if t.root == nil || t.root.n.count == 0 {
 		return
 	}
@@ -651,7 +651,7 @@ func (t AugBTree[T, A, AP]) Delete(item T) {
 
 // Set adds the given item to the tree. If an item in the tree already equals
 // the given one, it is replaced with the new item.
-func (t AugBTree[T, A, AP]) Set(item T) {
+func (t *AugBTree[T, A, AP]) Set(item T) {
 	if t.root == nil {
 		t.root = newLeafNode[T, A, AP]()
 	} else if t.root.n.count >= maxItems {
@@ -672,12 +672,12 @@ func (t AugBTree[T, A, AP]) Set(item T) {
 // MakeIter returns a new Iterator object. It is not safe to continue using an
 // Iterator after modifications are made to the tree. If modifications are made,
 // create a new Iterator.
-func (t AugBTree[T, A, AP]) MakeIter() Iterator[T, A, AP] {
+func (t *AugBTree[T, A, AP]) MakeIter() Iterator[T, A, AP] {
 	return Iterator[T, A, AP]{r: t.root, pos: -1}
 }
 
 // Height returns the height of the tree.
-func (t AugBTree[T, A, AP]) Height() int {
+func (t *AugBTree[T, A, AP]) Height() int {
 	if t.root == nil {
 		return 0
 	}
@@ -691,13 +691,13 @@ func (t AugBTree[T, A, AP]) Height() int {
 }
 
 // Len returns the number of items currently in the tree.
-func (t AugBTree[T, A, AP]) Len() int {
+func (t *AugBTree[T, A, AP]) Len() int {
 	return t.length
 }
 
 // String returns a string description of the tree. The format is
 // similar to the https://en.wikipedia.org/wiki/Newick_format.
-func (t AugBTree[T, A, AP]) String() string {
+func (t *AugBTree[T, A, AP]) String() string {
 	if t.length == 0 {
 		return ";"
 	}

@@ -48,8 +48,8 @@ type OrderStatTree[T Item[T]] struct {
 	t AugBTree[T, orderStatAug[T], *orderStatAug[T]]
 }
 
-func MakeOrderStatTree[T Item[T]]() OrderStatTree[T] {
-	return OrderStatTree[T]{
+func MakeOrderStatTree[T Item[T]]() *OrderStatTree[T] {
+	return &OrderStatTree[T]{
 		AugBTree[T, orderStatAug[T], *orderStatAug[T]]{},
 	}
 }
