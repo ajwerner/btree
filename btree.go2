@@ -1,26 +1,26 @@
 package btree
 
-type noopAug[type T Item] struct{}
+type noopAug[T Item] struct{}
 
 func (a *noopAug[T]) Clone() noopAug[T] {
 	return noopAug[T]{}
 }
 
-func (a *noopAug[T]) Update(n Node[T, *noopAug[T]]) {
+func (a *noopAug[T]) Update(n Node[*noopAug[T]]) {
 }
 
-func (a *noopAug[T]) UpdateOnInsert(item T, n, child Node[T, *noopAug[T]]) (updated bool) {
+func (a *noopAug[T]) UpdateOnInsert(item T, n, child Node[*noopAug[T]]) (updated bool) {
 	return false
 }
-func (a *noopAug[T]) UpdateOnRemoval(item T, n, child Node[T, *noopAug[T]]) (updated bool) {
+func (a *noopAug[T]) UpdateOnRemoval(item T, n, child Node[*noopAug[T]]) (updated bool) {
 	return false
 }
 
-type BTree[type T Item] struct {
+type BTree[T Item] struct {
 	t AugBTree[T, noopAug[T]]
 }
 
-func MakeBTree[type T Item]() BTree[T] {
+func MakeBTree[T Item]() BTree[T] {
 	return BTree[T]{
 		AugBTree[T, noopAug[T]]{},
 	}
@@ -30,7 +30,7 @@ func (t *BTree[T]) Set(v T) {
 	t.t.Set(v)
 }
 
-type BTreeIterator[type T Item] struct {
+type BTreeIterator[T Item] struct {
 	it Iterator[T, noopAug[T]]
 }
 

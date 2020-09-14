@@ -1,6 +1,6 @@
 package btree
 
-type orderStatAug[type T Item] struct {
+type orderStatAug[T Item] struct {
 	// children is the number of items rooted at the current subtree.
 	children int
 }
@@ -10,7 +10,7 @@ func (a *orderStatAug[T]) Clone() orderStatAug[T] {
 }
 
 // Update will update the count for the current node.
-func (a *orderStatAug[T]) Update(n Node[T, *orderStatAug[T]]) {
+func (a *orderStatAug[T]) Update(n Node[*orderStatAug[T]]) {
 	var children int
 	if !n.IsLeaf() {
 		var it NodeIterator[T, orderStatAug[T]]
@@ -28,7 +28,7 @@ func (a *orderStatAug[T]) Update(n Node[T, *orderStatAug[T]]) {
 
 func (a *orderStatAug[T]) UpdateOnInsert(
 	item T,
-	n, child Node[T, *orderStatAug[T]],
+	n, child Node[*orderStatAug[T]],
 ) (updated bool) {
 	// TODO(ajwerner): optimize this.
 	a.Update(n)
@@ -37,18 +37,18 @@ func (a *orderStatAug[T]) UpdateOnInsert(
 
 func (a *orderStatAug[T]) UpdateOnRemoval(
 	item T,
-	n, child Node[T, *orderStatAug[T]],
+	n, child Node[*orderStatAug[T]],
 ) (updated bool) {
 	// TODO(ajwerner): optimize this.
 	a.Update(n)
 	return true
 }
 
-type OrderStatTree[type T Item] struct {
+type OrderStatTree[T Item] struct {
 	t AugBTree[T, orderStatAug[T]]
 }
 
-func MakeOrderStatTree[type T Item]() OrderStatTree[T] {
+func MakeOrderStatTree[T Item]() OrderStatTree[T] {
 	return OrderStatTree[T]{
 		AugBTree[T, orderStatAug[T]]{},
 	}
@@ -58,7 +58,7 @@ func (t *OrderStatTree[T]) Set(v T) {
 	t.t.Set(v)
 }
 
-type OrderStatIterator[type T Item] struct {
+type OrderStatIterator[T Item] struct {
 	it Iterator[T, orderStatAug[T]]
 }
 

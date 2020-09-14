@@ -16,7 +16,7 @@ func (i IntInterval) Less(o IntInterval) bool {
 	return i[0] < o[0]
 }
 
-type _[type A any] interface{}
+type _[A any] interface{}
 
 func TestIntervalTree(t *testing.T) {
 	assertEq := func(t *testing.T, exp, got IntInterval) {
