@@ -2,8 +2,7 @@ package btree
 
 type noopAug[T Item[T]] struct{}
 
-func (a *noopAug[T]) Clone() noopAug[T] {
-	return noopAug[T]{}
+func (a *noopAug[T]) CopyInto(*noopAug[T])  {
 }
 
 func (a *noopAug[T]) Update(n Node[*noopAug[T]]) {
@@ -17,12 +16,12 @@ func (a *noopAug[T]) UpdateOnRemoval(item T, n, child Node[*noopAug[T]]) (update
 }
 
 type BTree[T Item[T]] struct {
-	t AugBTree[T, noopAug[T]]
+	t AugBTree[T, noopAug[T], *noopAug[T]]
 }
 
-func MakeBTree[T Item[T]]() BTree[T] {
-	return BTree[T]{
-		AugBTree[T, noopAug[T]]{},
+func MakeBTree[T Item[T]]() *BTree[T] {
+	return &BTree[T]{
+		AugBTree[T, noopAug[T], *noopAug[T]]{},
 	}
 }
 
@@ -31,7 +30,7 @@ func (t *BTree[T]) Set(v T) {
 }
 
 type BTreeIterator[T Item[T]] struct {
-	it Iterator[T, noopAug[T]]
+	it Iterator[T, noopAug[T], *noopAug[T]]
 }
 
 func (t *BTree[T]) MakeIter() BTreeIterator[T] {

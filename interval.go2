@@ -10,8 +10,8 @@ type Interval[T Item[T], I any] interface {
 
 type intervalAug[T Item[T], I Interval[T, I]] struct{}
 
-func (a *intervalAug[T, I]) Clone() intervalAug[T, I] {
-	return intervalAug[T, I]{}
+func (a *intervalAug[T, I]) CopyInto(dest *intervalAug[T, I]) {
+	*dest = *a
 }
 
 func (a *intervalAug[T, I]) Update(n Node[*intervalAug[T, I]]) {
@@ -33,12 +33,12 @@ func (a *intervalAug[T, I]) UpdateOnRemoval(
 }
 
 type IntervalTree[T Item[T], I Interval[T, I]] struct {
-	t AugBTree[I, intervalAug[T, I]]
+	t AugBTree[I, intervalAug[T, I], *intervalAug[T, I]]
 }
 
 func MakeIntervalTree[T Item[T], I Interval[T, I]]() IntervalTree[T, I] {
 	return IntervalTree[T, I]{
-		AugBTree[I, intervalAug[T, I]]{},
+		AugBTree[I, intervalAug[T, I], *intervalAug[T, I]]{},
 	}
 }
 
@@ -47,7 +47,7 @@ func (t *IntervalTree[T, I]) Set(v I) {
 }
 
 type IntervalIterator[T Item[T], I Interval[T, I]] struct {
-	it Iterator[I, intervalAug[T, I]]
+	it Iterator[I, intervalAug[T, I], *intervalAug[T, I]]
 
 	// The "soft" lower-bound constraint.
 	constrMinN       Node[intervalAug[T, I]]

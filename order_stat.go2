@@ -5,15 +5,15 @@ type orderStatAug[T Item[T]] struct {
 	children int
 }
 
-func (a *orderStatAug[T]) Clone() orderStatAug[T] {
-	return orderStatAug[T]{}
+func (a *orderStatAug[T]) CopyInto(dest *orderStatAug[T]) {
+	*dest = *a
 }
 
 // Update will update the count for the current node.
 func (a *orderStatAug[T]) Update(n Node[*orderStatAug[T]]) {
 	var children int
 	if !n.IsLeaf() {
-		var it NodeIterator[T, orderStatAug[T]]
+		var it NodeIterator[T, orderStatAug[T], *orderStatAug[T]]
 		InitNodeIterator(&it, n)
 		N := int(n.Count())
 		for i := 0; i <= N; i++ {
@@ -45,12 +45,12 @@ func (a *orderStatAug[T]) UpdateOnRemoval(
 }
 
 type OrderStatTree[T Item[T]] struct {
-	t AugBTree[T, orderStatAug[T]]
+	t AugBTree[T, orderStatAug[T], *orderStatAug[T]]
 }
 
 func MakeOrderStatTree[T Item[T]]() OrderStatTree[T] {
 	return OrderStatTree[T]{
-		AugBTree[T, orderStatAug[T]]{},
+		AugBTree[T, orderStatAug[T], *orderStatAug[T]]{},
 	}
 }
 
@@ -59,7 +59,7 @@ func (t *OrderStatTree[T]) Set(v T) {
 }
 
 type OrderStatIterator[T Item[T]] struct {
-	it Iterator[T, orderStatAug[T]]
+	it Iterator[T, orderStatAug[T], *orderStatAug[T]]
 }
 
 func (t *OrderStatTree[T]) MakeIter() OrderStatIterator[T] {
