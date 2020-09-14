@@ -30,7 +30,7 @@ type Item[T any] interface {
 
 // NodeIterator can be utilized by an Aug implementation to iterate the entries
 // in a node.
-type NodeIterator[T Item, *A Aug[T, A]] struct {
+type NodeIterator[T Item[T], *A Aug[T, A]] struct {
 	n   *node[T, A]
 	pos int
 }
@@ -53,7 +53,7 @@ func (ni *NodeIterator[T, A]) Child(i int) Node[*A] {
 
 // InitNodeIterator is used during to interate a node passed to an Aug via
 // an update method. It allows iteration without any allocations.
-func InitNodeIterator[T Item, *A Aug[T, A]](ni *NodeIterator[T, A], n Node[*A]) {
+func InitNodeIterator[T Item[T], *A Aug[T, A]](ni *NodeIterator[T, A], n Node[*A]) {
 	ni.n = n.(*node[T, A])
 	ni.pos = 0
 }
@@ -66,13 +66,11 @@ type Node[A any] interface {
 	IsLeaf() bool
 }
 
-type Aug[T Item, A any] interface {
-	type A
-	Clone() A
-
+type Aug[T Item[T], A any] interface {
 	// TODO(ajwerner): document how these update calls work and how to use them
 	// properly.
 
+	Clone() A
 	Update(n Node[*A])
 	UpdateOnInsert(item T, n, child Node[*A]) (updated bool)
 	UpdateOnRemoval(item T, n, child Node[*A]) (updated bool)
@@ -82,12 +80,12 @@ type Aug[T Item, A any] interface {
 //
 // Write operations are not safe for concurrent mutation by multiple
 // goroutines, but Read operations are.
-type AugBTree[T Item, *A Aug[T, A]] struct {
+type AugBTree[T Item[T], *A Aug[T, A]] struct {
 	root   *node[T, A]
 	length int
 }
 
-type leafNode[T Item, *A Aug[T, A]] struct {
+type leafNode[T Item[T], *A Aug[T, A]] struct {
 	ref   int32
 	count int16
 	leaf  bool
@@ -95,7 +93,7 @@ type leafNode[T Item, *A Aug[T, A]] struct {
 	items [maxItems]T
 }
 
-type node[T Item, *A Aug[T, A]] struct {
+type node[T Item[T], *A Aug[T, A]] struct {
 	// TODO(ajwerner): embed the leafNode here to avoid all of the ugly `n.n`
 	// calls when that all works in go2 generics.
 	n        leafNode[T, A]
@@ -130,22 +128,22 @@ func (n *node[T, A]) IterateChildren(f func(*A)) {
 }
 
 //go:nocheckptr casts a ptr to a smaller struct to a ptr to a larger struct.
-func leafToNode[T Item, *A Aug[T, A]](ln *leafNode[T, A]) *node[T, A] {
+func leafToNode[T Item[T], *A Aug[T, A]](ln *leafNode[T, A]) *node[T, A] {
 	return (*node[T, A])(unsafe.Pointer(ln))
 }
 
-func nodeToLeaf[T Item, *A Aug[T, A]](n *node[T, A]) *leafNode[T, A] {
+func nodeToLeaf[T Item[T], *A Aug[T, A]](n *node[T, A]) *leafNode[T, A] {
 	return (*leafNode[T, A])(unsafe.Pointer(n))
 }
 
-func newLeafNode[T Item, *A Aug[T, A]]() *node[T, A] {
+func newLeafNode[T Item[T], *A Aug[T, A]]() *node[T, A] {
 	n := leafToNode(new(leafNode[T, A]))
 	n.n.leaf = true
 	n.n.ref = 1
 	return n
 }
 
-func newNode[T Item, *A Aug[T, A]]() *node[T, A] {
+func newNode[T Item[T], *A Aug[T, A]]() *node[T, A] {
 	n := new(node[T, A])
 	n.n.ref = 1
 	return n
@@ -160,7 +158,7 @@ func newNode[T Item, *A Aug[T, A]]() *node[T, A] {
 //
 // When a node is cloned, the provided pointer will be redirected to the new
 // mutable node.
-func mut[T Item, *A Aug[T, A]](n **node[T, A]) *node[T, A] {
+func mut[T Item[T], *A Aug[T, A]](n **node[T, A]) *node[T, A] {
 	if atomic.LoadInt32(&(*n).n.ref) == 1 {
 		// Exclusive ownership. Can mutate in place.
 		return *n
@@ -732,16 +730,16 @@ func (n *node[T, A]) writeString(b *strings.Builder) {
 
 // iterStack represents a stack of (node, pos) tuples, which captures
 // iteration state as an Iterator descends a AugBTree.
-type iterStack[T Item, *A Aug[T, A]] struct {
+type iterStack[T Item[T], *A Aug[T, A]] struct {
 	a    iterStackArr[T, A]
 	aLen int16 // -1 when using s
 	s    []iterFrame[T, A]
 }
 
 // Used to avoid allocations for stacks below a certain size.
-type iterStackArr[T Item, *A Aug[T, A]] [3]iterFrame[T, A]
+type iterStackArr[T Item[T], *A Aug[T, A]] [3]iterFrame[T, A]
 
-type iterFrame[T Item, *A Aug[T, A]] struct {
+type iterFrame[T Item[T], *A Aug[T, A]] struct {
 	n   *node[T, A]
 	pos int16
 }
@@ -786,7 +784,7 @@ func (is *iterStack[T, A]) reset() {
 }
 
 // Iterator is responsible for search and traversal within a AugBTree.
-type Iterator[T Item, *A Aug[T, A]] struct {
+type Iterator[T Item[T], *A Aug[T, A]] struct {
 	r   *node[T, A]
 	n   *node[T, A]
 	pos int16

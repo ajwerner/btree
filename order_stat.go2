@@ -1,6 +1,6 @@
 package btree
 
-type orderStatAug[T Item] struct {
+type orderStatAug[T Item[T]] struct {
 	// children is the number of items rooted at the current subtree.
 	children int
 }
@@ -44,11 +44,11 @@ func (a *orderStatAug[T]) UpdateOnRemoval(
 	return true
 }
 
-type OrderStatTree[T Item] struct {
+type OrderStatTree[T Item[T]] struct {
 	t AugBTree[T, orderStatAug[T]]
 }
 
-func MakeOrderStatTree[T Item]() OrderStatTree[T] {
+func MakeOrderStatTree[T Item[T]]() OrderStatTree[T] {
 	return OrderStatTree[T]{
 		AugBTree[T, orderStatAug[T]]{},
 	}
@@ -58,7 +58,7 @@ func (t *OrderStatTree[T]) Set(v T) {
 	t.t.Set(v)
 }
 
-type OrderStatIterator[T Item] struct {
+type OrderStatIterator[T Item[T]] struct {
 	it Iterator[T, orderStatAug[T]]
 }
 

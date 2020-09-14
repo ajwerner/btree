@@ -2,14 +2,13 @@ package btree
 
 // Note this is totally incomplete
 
-type Interval[T Item, I any] interface {
-	type I
+type Interval[T Item[T], I any] interface {
 	Item[I]
 	Key() T
 	End() T
 }
 
-type intervalAug[T Item, I Interval[T, I]] struct{}
+type intervalAug[T Item[T], I Interval[T, I]] struct{}
 
 func (a *intervalAug[T, I]) Clone() intervalAug[T, I] {
 	return intervalAug[T, I]{}
@@ -33,11 +32,11 @@ func (a *intervalAug[T, I]) UpdateOnRemoval(
 	return false
 }
 
-type IntervalTree[T Item, I Interval[T, I]] struct {
+type IntervalTree[T Item[T], I Interval[T, I]] struct {
 	t AugBTree[I, intervalAug[T, I]]
 }
 
-func MakeIntervalTree[T Item, I Interval[T, I]]() IntervalTree[T, I] {
+func MakeIntervalTree[T Item[T], I Interval[T, I]]() IntervalTree[T, I] {
 	return IntervalTree[T, I]{
 		AugBTree[I, intervalAug[T, I]]{},
 	}
@@ -47,7 +46,7 @@ func (t *IntervalTree[T, I]) Set(v I) {
 	t.t.Set(v)
 }
 
-type IntervalIterator[T Item, I Interval[T, I]] struct {
+type IntervalIterator[T Item[T], I Interval[T, I]] struct {
 	it Iterator[I, intervalAug[T, I]]
 
 	// The "soft" lower-bound constraint.
