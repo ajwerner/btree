@@ -7,6 +7,9 @@ import (
 	"unsafe"
 )
 
+// TODO(ajwerner): It'd be amazing to find a way to make this not a single
+// compile-time constant.
+
 const (
 	degree   = 16
 	maxItems = 2*degree - 1
@@ -25,13 +28,42 @@ type Item[type T any] interface {
 	Less(T) bool
 }
 
+// NodeIterator can be utilized by an Aug implementation to iterate the entries
+// in a node.
+type NodeIterator[type T Item, *A Aug[T, A]] struct {
+	n   *node[T, A]
+	pos int
+}
+
+// Item returns the item at the given position in the node. Valid i values are
+// [0, n.Count()).
+func (ni *NodeIterator[T, A]) Item(i int) *T {
+	return &ni.n.n.items[i]
+}
+
+// Child returns the child node at the given position in the node. Valid i
+// values are [0, n.Count()]. If n is a leaf node or no child exists at that
+// slot, nil will be returned.
+func (ni *NodeIterator[T, A]) Child(i int) Node[T, *A] {
+	if !ni.n.n.leaf && ni.n.children[i] != nil {
+		return ni.n.children[i]
+	}
+	return nil
+}
+
+// InitNodeIterator is used during to interate a node passed to an Aug via
+// an update method. It allows iteration without any allocations.
+func InitNodeIterator[type T Item, *A Aug[T, A]](ni *NodeIterator[T, A], n Node[T, *A]) {
+	ni.n = n.(*node[T, A])
+	ni.pos = 0
+}
+
 // TODO(ajwerner): Tighten up this interface and make this more generally
 // efficient for updates where possible.
 type Node[type T Item, A any] interface {
 	GetA() A
 	Count() int16
 	IsLeaf() bool
-	IterateChildren(func(a A))
 }
 
 type Aug[type T Item, A any] interface {
