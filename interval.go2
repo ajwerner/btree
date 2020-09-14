@@ -1,5 +1,7 @@
 package btree
 
+// Note this is totally incomplete
+
 type Interval[type T Item, I any] interface {
 	type I
 	Item[I]
@@ -20,6 +22,7 @@ func (a *intervalAug[T, I]) UpdateOnInsert(
 	item I,
 	n, child Node[I, *intervalAug[T, I]],
 ) (updated bool) {
+
 	return false
 }
 

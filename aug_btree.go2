@@ -13,27 +13,34 @@ const (
 	minItems = degree - 1
 )
 
-type NodeIterator[type T Item, A Aug[T, A]] struct {
-	n *Node[T, A]
-}
-
 // TODO(ajwerner): Probably we want to have comparison return an integer result
 // TODO(ajwerner): Probably we want comparison to occur on pointers to the
-// objects rather than the objects themselves.
+// objects rather than the objects themselves, at least in some cases. For very
+// large objects, probably it's better to just store the objects as pointers
+// in the btree itself and to use a sync.Pool to pool allocations. For very
+// small objects, directly calling less on the object is probably ideal. The
+// question is mid-sized objects.
 
 type Item[type T any] interface {
 	Less(T) bool
 }
 
+// TODO(ajwerner): Tighten up this interface and make this more generally
+// efficient for updates where possible.
 type Node[type T Item, A any] interface {
 	GetA() A
 	Count() int16
 	IsLeaf() bool
+	IterateChildren(func(a A))
 }
 
 type Aug[type T Item, A any] interface {
 	type A
 	Clone() A
+
+	// TODO(ajwerner): document how these update calls work and how to use them
+	// properly.
+
 	Update(n Node[T, *A])
 	UpdateOnInsert(item T, n, child Node[T, *A]) (updated bool)
 	UpdateOnRemoval(item T, n, child Node[T, *A]) (updated bool)
@@ -57,6 +64,8 @@ type leafNode[type T Item, *A Aug[T, A]] struct {
 }
 
 type node[type T Item, *A Aug[T, A]] struct {
+	// TODO(ajwerner): embed the leafNode here to avoid all of the ugly `n.n`
+	// calls when that all works in go2 generics.
 	n        leafNode[T, A]
 	children [maxItems + 1]*node[T, A]
 }

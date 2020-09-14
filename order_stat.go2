@@ -1,0 +1,108 @@
+package btree
+
+type orderStatAug[type T Item] struct {
+	// children is the number of items rooted at the current subtree.
+	children int
+}
+
+func (a *orderStatAug[T]) Clone() orderStatAug[T] {
+	return orderStatAug[T]{}
+}
+
+// Update will update the count for the current node.
+func (a *orderStatAug[T]) Update(n Node[T, *orderStatAug[T]]) {
+	var children int
+	n.IterateChildren(func(ca *orderStatAug[T]) {
+		children += ca.children
+	})
+	children += int(n.Count())
+	a.children = children
+}
+
+func (a *orderStatAug[T]) UpdateOnInsert(
+	item T,
+	n, child Node[T, *orderStatAug[T]],
+) (updated bool) {
+	// TODO(ajwerner): optimize this.
+	a.Update(n)
+	return true
+}
+
+func (a *orderStatAug[T]) UpdateOnRemoval(
+	item T,
+	n, child Node[T, *orderStatAug[T]],
+) (updated bool) {
+	// TODO(ajwerner): optimize this.
+	a.Update(n)
+	return true
+}
+
+type OrderStatTree[type T Item] struct {
+	t AugBTree[T, orderStatAug[T]]
+}
+
+func MakeOrderStatTree[type T Item]() OrderStatTree[T] {
+	return OrderStatTree[T]{
+		AugBTree[T, orderStatAug[T]]{},
+	}
+}
+
+func (t *OrderStatTree[T]) Set(v T) {
+	t.t.Set(v)
+}
+
+type OrderStatIterator[type T Item] struct {
+	it Iterator[T, orderStatAug[T]]
+}
+
+func (t *OrderStatTree[T]) MakeIter() OrderStatIterator[T] {
+	return OrderStatIterator[T]{
+		it: t.t.MakeIter(),
+	}
+}
+
+func (it *OrderStatIterator[T]) Nth(i int) {
+	it.it.Reset()
+	it.it.pos = 0
+	n := 0
+	for n <= i {
+		if !it.it.n.IsLeaf() && it.it.n.children[it.it.pos] != nil {
+			it.it.Descend(it.it.n, it.it.pos)
+			if n+it.it.n.n.aug.children <= i {
+				n += it.it.n.n.aug.children
+				it.it.Ascend()
+				if n == i {
+					return
+				}
+				n++
+				it.it.pos++
+			} else if it.it.pos > 0 {
+				// the result is in this subtree...
+				n++
+			}
+		} else {
+			// We're in the correct leaf, should be able to use sort.Search.
+			if n == i {
+				return
+			}
+			n++
+			it.it.pos++
+		}
+	}
+}
+
+func (it *OrderStatIterator[T]) First() {
+	it.it.First()
+}
+
+func (it *OrderStatIterator[T]) Next() {
+	it.it.Next()
+}
+
+func (it *OrderStatIterator[T]) Valid() bool {
+	return it.it.Valid()
+}
+
+func (it *OrderStatIterator[T]) Cur() T {
+	return T(it.it.Cur())
+}
