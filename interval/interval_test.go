@@ -1,0 +1,42 @@
+package interval
+
+/*
+import (
+	"testing"
+)
+
+type IntInterval [2]int
+
+func (i IntInterval) Key() Int { return Int(i[0]) }
+func (i IntInterval) End() Int { return Int(i[1]) }
+
+func (i IntInterval) Less(o IntInterval) bool {
+	if i[0] == o[0] {
+		return i[1] < o[1]
+	}
+	return i[0] < o[0]
+}
+
+type _[A any] interface{}
+
+func TestIntervalTree(t *testing.T) {
+	assertEq := func(t *testing.T, exp, got IntInterval) {
+		t.Helper()
+		if exp != got {
+			t.Fatalf("expected %d, got %d", exp, got)
+		}
+	}
+	tree := MakeIntervalTree[Int, IntInterval]()
+	tree.Set(IntInterval{1, 2})
+	tree.Set(IntInterval{2, 4})
+	tree.Set(IntInterval{3, 4})
+	tree.Set(IntInterval{3, 3})
+	tree.Set(IntInterval{2, 3})
+	iter := tree.MakeIter()
+	iter.First()
+	for _, exp := range []IntInterval{{1, 2}, {2, 3}, {2, 4}, {3, 3}, {3, 4}} {
+		assertEq(t, exp, iter.Cur())
+		iter.Next()
+	}
+}
+*/
