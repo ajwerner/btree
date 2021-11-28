@@ -298,10 +298,8 @@ func (n *node[T, A, AP]) split(i int) (T, *node[T, A, AP]) {
 		}
 	}
 	n.count = int16(i)
-	fmt.Println("here")
-	AP(&n.aug).Update(Node[*A](n))
-
-	AP(&n.aug).Update(Node[*A](next))
+	n.update()
+	next.update()
 	//AP(&N.N.aug).UpdateOnSplit(next)
 	/*
 		if N.max.compare(next.max) != 0 && N.max.compare(upperBound(out)) != 0 {
@@ -312,6 +310,10 @@ func (n *node[T, A, AP]) split(i int) (T, *node[T, A, AP]) {
 		}
 	*/
 	return out, next
+}
+
+func (n *node[T, A, AP]) update() {
+	AP(&n.aug).Update(n)
 }
 
 // insert inserts an item into the suAugBTree rooted at this node, making sure no

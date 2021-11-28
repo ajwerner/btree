@@ -60,6 +60,10 @@ func (t *OrderStatTree[T]) Set(v T) {
 	t.t.Set(v)
 }
 
+func (t *OrderStatTree[T]) Remove(v T) (removed bool) {
+	return t.t.Delete(v)
+}
+
 type OrderStatIterator[T btree.Item[T]] struct {
 	it btree.Iterator[T, orderStatAug[T], *orderStatAug[T]]
 }
@@ -71,33 +75,31 @@ func (t *OrderStatTree[T]) MakeIter() OrderStatIterator[T] {
 }
 
 func (it *OrderStatIterator[T]) Nth(i int) {
+	// Reset has bizarre semantics in that it initializes the iterator to
+	// an invalid position (-1) at the root of the tree. IncrementPos moves it
+	// to the first child and item of the
 	it.it.Reset()
-	it.it.Pos = 0
+	it.it.IncrementPos()
 	n := 0
-	var nit btree.NodeIterator[T, orderStatAug[T], *orderStatAug[T]]
 	for n <= i {
-		btree.InitNodeIterator(&nit, it.it.Node())
-		if !it.it.n.IsLeaf() && it.it.N.asd[it.it.Pos] != nil {
-			it.it.Descend(it.it.N, it.it.Pos)
-			if n+it.it.n.n.aug.children <= i {
-				n += it.it.n.n.aug.children
-				it.it.Ascend()
-				if n == i {
-					return
-				}
-				n++
-				it.it.pos++
-			} else if it.it.pos > 0 {
-				// the result is in this subtree...
-				n++
-			}
+		if it.it.IsLeaf() {
+			it.it.SetPos(int16(i - n))
+			break
 		} else {
-			// We're in the correct leaf, should be able to use sort.Search.
-			if n == i {
-				return
+			curChild := it.it.CurChild()
+			if children := curChild.GetA().children; n+children <= i {
+				n += children
+				if n < i {
+					n++
+					it.it.IncrementPos()
+				} else if i == n {
+					break
+				} else if n > i {
+					panic("invariant violated")
+				}
+			} else {
+				it.it.Descend()
 			}
-			n++
-			it.it.pos++
 		}
 	}
 }

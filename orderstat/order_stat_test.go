@@ -5,14 +5,11 @@ import (
 	"testing"
 )
 
-
 type Int int
 
 func (i Int) Less(o Int) bool {
 	return i < o
 }
-
-
 
 func assertIntEq(t *testing.T, exp, got Int) {
 	t.Helper()
@@ -38,6 +35,7 @@ func TestOrderStatTree(t *testing.T) {
 }
 
 func TestOrderStatNth(t *testing.T) {
+	t.Parallel()
 	tree := MakeOrderStatTree[Int]()
 	const maxN = 1000
 	N := rand.Intn(maxN)
@@ -49,7 +47,22 @@ func TestOrderStatNth(t *testing.T) {
 	for _, idx := range perm {
 		tree.Set(Int(items[idx]))
 	}
+	removePerm := rand.Perm(N)
+	retainAll := rand.Float64() < .25
+	var removed []int
+	for _, idx := range removePerm {
+		if !retainAll && rand.Float64() < .05 {
+			continue
+		}
+		tree.Remove(Int(items[idx]))
+		removed = append(removed, items[idx])
+	}
+	t.Logf("removed %d/%d", len(removed), N)
+	for _, i := range removed {
+		tree.Set(Int(i))
+	}
 	perm = rand.Perm(N)
+
 	iter := tree.MakeIter()
 	for _, idx := range perm {
 		iter.Nth(idx)

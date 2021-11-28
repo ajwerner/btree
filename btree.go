@@ -39,18 +39,10 @@ func (t *BTree[T]) MakeIter() BTreeIterator[T] {
 	return BTreeIterator[T]{t.t.MakeIter()}
 }
 
-func (it *BTreeIterator[T]) First() {
-	it.it.First()
-}
+func (it *BTreeIterator[T]) First() { it.it.First() }
 
-func (it *BTreeIterator[T]) Next() {
-	it.it.Next()
-}
+func (it *BTreeIterator[T]) Next() { it.it.Next() }
 
-func (it *BTreeIterator[T]) Valid() bool {
-	return it.it.Valid()
-}
+func (it *BTreeIterator[T]) Valid() bool { return it.it.Valid() }
 
-func (it *BTreeIterator[T]) Cur() T {
-	return it.it.Cur()
-}
+func (it *BTreeIterator[T]) Cur() T { return it.it.Cur() }
