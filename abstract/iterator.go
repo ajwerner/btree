@@ -2,168 +2,198 @@ package abstract
 
 // Iterator is responsible for search and traversal within a AugBTree.
 type Iterator[T Item[T], A any, AP Aug[T, A]] struct {
-	r   *node[T, A, AP]
-	n   *node[T, A, AP]
-	Pos int16
-	s   iterStack[T, A, AP]
+	r *node[T, A, AP]
+	iterFrame[T, A, AP]
+	s iterStack[T, A, AP]
 	// TODO(ajwerner): Add back augmented search
 }
 
 func (i *Iterator[T, A, AP]) Reset() {
-	i.n = i.r
-	i.Pos = -1
+	i.node = i.r
+	i.pos = -1
 	i.s.reset()
 }
 
-func (i *Iterator[T, A, AP]) Descend(n *node[T, A, AP], pos int16) {
-	i.s.push(iterFrame[T, A, AP]{n: n, pos: pos})
-	i.n = n.children[pos]
-	i.Pos = 0
+func (i *Iterator[T, A, AP]) Pos() int16 {
+	return i.pos
+}
+
+func (i *Iterator[T, A, AP]) makeFrame(n *node[T, A, AP], pos int16) iterFrame[T, A, AP] {
+	return iterFrame[T, A, AP]{
+		node: n,
+		pos:  pos,
+	}
+}
+
+func (i *Iterator[T, A, AP]) CurChild() Node[*A] {
+	if i.Pos() < 0 || i.IsLeaf() {
+		return nil
+	}
+	return i.children[i.pos]
+}
+
+func (i *Iterator[T, A, AP]) Descend() {
+	i.s.push(i.iterFrame)
+	i.iterFrame = i.makeFrame(i.children[i.pos], 0)
 }
 
 // ascend ascends up to the current node's parent and resets the position
 // to the one previously set for this parent node.
 func (i *Iterator[T, A, AP]) Ascend() {
-	f := i.s.pop()
-	i.n = f.n
-	i.Pos = f.pos
+	i.iterFrame = i.s.pop()
 }
 
 // SeekGE seeks to the first item greater-than or equal to the provided
 // item.
 func (i *Iterator[T, A, AP]) SeekGE(item T) {
 	i.Reset()
-	if i.n == nil {
+	if i.node == nil {
 		return
 	}
 	for {
-		pos, found := i.n.find(item)
-		i.Pos = int16(pos)
+		pos, found := i.find(item)
+		i.pos = int16(pos)
 		if found {
 			return
 		}
-		if i.n.leaf {
-			if i.Pos == i.n.count {
+		if i.leaf {
+			if i.pos == i.count {
 				i.Next()
 			}
 			return
 		}
-		i.Descend(i.n, i.Pos)
+		i.Descend()
 	}
 }
 
 // SeekLT seeks to the first item less-than the provided item.
 func (i *Iterator[T, A, AP]) SeekLT(item T) {
 	i.Reset()
-	if i.n == nil {
+	if i.node == nil {
 		return
 	}
 	for {
-		pos, found := i.n.find(item)
-		i.Pos = int16(pos)
-		if found || i.n.leaf {
+		pos, found := i.find(item)
+		i.pos = int16(pos)
+		if found || i.leaf {
 			i.Prev()
 			return
 		}
-		i.Descend(i.n, i.Pos)
+		i.Descend()
 	}
 }
 
 // First seeks to the first item in the AugBTree.
 func (i *Iterator[T, A, AP]) First() {
 	i.Reset()
-	if i.n == nil {
+	i.pos = 0
+	if i.node == nil {
 		return
 	}
-	for !i.n.leaf {
-		i.Descend(i.n, 0)
+	for !i.leaf {
+		i.Descend()
 	}
-	i.Pos = 0
+	i.pos = 0
 }
 
 // Last seeks to the last item in the AugBTree.
 func (i *Iterator[T, A, AP]) Last() {
 	i.Reset()
-	if i.n == nil {
+	if i.node == nil {
 		return
 	}
-	for !i.n.leaf {
-		i.Descend(i.n, i.n.count)
+	for !i.leaf {
+		i.pos = i.count
+		i.Descend()
 	}
-	i.Pos = i.n.count - 1
+	i.pos = i.count - 1
+}
+
+func (i *Iterator[T, A, AP]) IncrementPos() bool {
+	return i.SetPos(i.pos + 1)
+}
+
+func (i *Iterator[T, A, AP]) SetPos(pos int16) bool {
+	if pos <= i.count && pos >= 0 {
+		i.pos = pos
+		return true
+	}
+	return false
 }
 
 // Next positions the Iterator to the item immediately following
 // its current position.
 func (i *Iterator[T, A, AP]) Next() {
-	if i.n == nil {
+	if i.node == nil {
 		return
 	}
 
-	if i.n.leaf {
-		i.Pos++
-		if i.Pos < i.n.count {
+	if i.leaf {
+		i.pos++
+		if i.pos < i.count {
 			return
 		}
-		for i.s.len() > 0 && i.Pos >= i.n.count {
+		for i.s.len() > 0 && i.pos >= i.count {
 			i.Ascend()
 		}
 		return
 	}
-
-	i.Descend(i.n, i.Pos+1)
-	for !i.n.leaf {
-		i.Descend(i.n, 0)
+	i.pos++
+	i.Descend()
+	for !i.leaf {
+		i.pos = 0
+		i.Descend()
 	}
-	i.Pos = 0
+	i.pos = 0
 }
 
 func (i *Iterator[T, A, AP]) IsLeaf() bool {
-	return i.n.leaf
+	return i.leaf
 }
 
 func (i *Iterator[T, A, AP]) Node() Node[*A] {
-	return i.n
+	return i.node
 }
 
 // Prev positions the Iterator to the item immediately preceding
 // its current position.
 func (i *Iterator[T, A, AP]) Prev() {
-	if i.n == nil {
+	if i.node == nil {
 		return
 	}
 
-	if i.n.leaf {
-		i.Pos--
-		if i.Pos >= 0 {
+	if i.leaf {
+		i.pos--
+		if i.pos >= 0 {
 			return
 		}
-		for i.s.len() > 0 && i.Pos < 0 {
+		for i.s.len() > 0 && i.pos < 0 {
 			i.Ascend()
-			i.Pos--
+			i.pos--
 		}
 		return
 	}
 
-	i.Descend(i.n, i.Pos)
-	for !i.n.leaf {
-		i.Descend(i.n, i.n.count)
+	i.Descend()
+	for !i.leaf {
+		i.pos = i.count
+		i.Descend()
 	}
-	i.Pos = i.n.count - 1
+	i.pos = i.count - 1
 }
 
 // Valid returns whether the Iterator is positioned at a valid position.
 func (i *Iterator[T, A, AP]) Valid() bool {
-	return i.Pos >= 0 && i.Pos < i.n.count
+	return i.pos >= 0 && i.pos < i.count
 }
 
 // Cur returns the item at the Iterator's current position. It is illegal
 // to call Cur if the Iterator is not valid.
 func (i *Iterator[T, A, AP]) Cur() T {
-	return i.n.items[i.Pos]
+	return i.items[i.pos]
 }
 
-// iterStack represents a stack of (node, Pos) tuples, which captures
+// iterStack represents a stack of (node, pos) tuples, which captures
 // iteration state as an Iterator descends a AugBTree.
 type iterStack[T Item[T], A any, AP Aug[T, A]] struct {
 	a    iterStackArr[T, A, AP]
@@ -177,7 +207,7 @@ const iterStackDepth = 6
 type iterStackArr[T Item[T], A any, AP Aug[T, A]] [iterStackDepth]iterFrame[T, A, AP]
 
 type iterFrame[T Item[T], A any, AP Aug[T, A]] struct {
-	n   *node[T, A, AP]
+	*node[T, A, AP]
 	pos int16
 }
 

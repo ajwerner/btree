@@ -8,7 +8,7 @@ import (
 // compile-time constant.
 
 const (
-	Degree   = 16
+	Degree   = 2
 	MaxItems = 2*Degree - 1
 	MinItems = Degree - 1
 )
@@ -20,6 +20,9 @@ const (
 // in the btree itself and to use a sync.Pool to pool allocations. For very
 // small objects, directly calling less on the object is probably ideal. The
 // question is mid-sized objects.
+// TODO(ajwerner): I think it'd be better to take a comparison function.
+// TODO(ajwerner): A KV mapping with comparisons over keys is more general
+// than an object which is both.
 
 type Item[T any] interface {
 	Less(T) bool
@@ -116,11 +119,11 @@ func (t *AugBTree[T, A, AP]) Clone() *AugBTree[T, A, AP] {
 }
 
 // Delete removes an item equal to the passed in item from the tree.
-func (t *AugBTree[T, A, AP]) Delete(item T) {
+func (t *AugBTree[T, A, AP]) Delete(item T) (found bool) {
 	if t.root == nil || t.root.count == 0 {
-		return
+		return false
 	}
-	if _, found, _ := mut(&t.root).remove(item); found {
+	if _, found, _ = mut(&t.root).remove(item); found {
 		t.length--
 	}
 	if t.root.count == 0 {
@@ -132,6 +135,7 @@ func (t *AugBTree[T, A, AP]) Delete(item T) {
 		}
 		old.decRef(false /* recursive */)
 	}
+	return found
 }
 
 // Set adds the given item to the tree. If an item in the tree already equals
@@ -145,6 +149,8 @@ func (t *AugBTree[T, A, AP]) Set(item T) {
 		newRoot.count = 1
 		newRoot.items[0] = splitLa
 		newRoot.children[0] = t.root
+		AP(&t.root.aug).Update(t.root)
+		AP(&splitNode.aug).Update(splitNode)
 		newRoot.children[1] = splitNode
 		AP(&newRoot.aug).Update(newRoot)
 		t.root = newRoot
@@ -158,7 +164,9 @@ func (t *AugBTree[T, A, AP]) Set(item T) {
 // Iterator after modifications are made to the tree. If modifications are made,
 // create a new Iterator.
 func (t *AugBTree[T, A, AP]) MakeIter() Iterator[T, A, AP] {
-	return Iterator[T, A, AP]{r: t.root, Pos: -1}
+	it := Iterator[T, A, AP]{r: t.root}
+	it.Reset()
+	return it
 }
 
 // Height returns the height of the tree.
