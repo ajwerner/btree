@@ -2,10 +2,7 @@ package btree
 
 import "github.com/ajwerner/btree/new/abstract"
 
-type noopAug[T abstract.Item[T]] struct{}
-
-func (a *noopAug[T]) CopyInto(*noopAug[T]) {
-}
+type noopAug[K any] struct{}
 
 func (a *noopAug[T]) Update(n abstract.Node[*noopAug[T]]) {
 }
@@ -17,32 +14,33 @@ func (a *noopAug[T]) UpdateOnRemoval(item T, n, child abstract.Node[*noopAug[T]]
 	return false
 }
 
-type BTree[T abstract.Item[T]] struct {
-	t abstract.AugBTree[T, noopAug[T], *noopAug[T]]
+type BTree[K, V any] struct {
+	t abstract.AugBTree[K, V, noopAug[K], *noopAug[K]]
 }
 
-func MakeBTree[T abstract.Item[T]]() *BTree[T] {
-	return &BTree[T]{
-		abstract.AugBTree[T, noopAug[T], *noopAug[T]]{},
+func New[K, V any](cmp func(K, K) int) *BTree[K, V] {
+	return &BTree[K, V]{
+		t: abstract.MakeBTree[K, V, noopAug[K], *noopAug[K]](cmp),
 	}
 }
 
-func (t *BTree[T]) Set(v T) {
-	t.t.Set(v)
+func (t *BTree[K, V]) Insert(k K, v V) {
+	t.t.Set(k, v)
 }
 
-type BTreeIterator[T abstract.Item[T]] struct {
-	it abstract.Iterator[T, noopAug[T], *noopAug[T]]
+type BTreeIterator[K, V any] struct {
+	it abstract.Iterator[K, V, noopAug[K], *noopAug[K]]
 }
 
-func (t *BTree[T]) MakeIter() BTreeIterator[T] {
-	return BTreeIterator[T]{t.t.MakeIter()}
+func (t *BTree[K, V]) MakeIter() BTreeIterator[K, V] {
+	return BTreeIterator[K, V]{t.t.MakeIter()}
 }
 
-func (it *BTreeIterator[T]) First() { it.it.First() }
+func (it *BTreeIterator[K, V]) First() { it.it.First() }
 
-func (it *BTreeIterator[T]) Next() { it.it.Next() }
+func (it *BTreeIterator[K, V]) Next() { it.it.Next() }
 
-func (it *BTreeIterator[T]) Valid() bool { return it.it.Valid() }
+func (it *BTreeIterator[K, V]) Valid() bool { return it.it.Valid() }
 
-func (it *BTreeIterator[T]) Cur() T { return it.it.Cur() }
+func (it *BTreeIterator[K, V]) Key() K   { return it.it.Key() }
+func (it *BTreeIterator[K, V]) Value() V { return it.it.Value() }

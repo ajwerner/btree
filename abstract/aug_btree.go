@@ -13,31 +13,32 @@ const (
 	MinItems = Degree - 1
 )
 
-// TODO(ajwerner): Probably we want to have comparison return an integer result
 // TODO(ajwerner): Probably we want comparison to occur on pointers to the
 // objects rather than the objects themselves, at least in some cases. For very
 // large objects, probably it's better to just store the objects as pointers
 // in the btree itself and to use a sync.Pool to pool allocations. For very
 // small objects, directly calling less on the object is probably ideal. The
 // question is mid-sized objects.
-// TODO(ajwerner): I think it'd be better to take a comparison function.
-// TODO(ajwerner): A KV mapping with comparisons over keys is more general
-// than an object which is both.
 
 // AugBTree is an implementation of an augmented B-Tree.
 //
 // Write operations are not safe for concurrent mutation by multiple
 // goroutines, but Read operations are.
-type AugBTree[T Item[T], A any, AP Aug[T, A]] struct {
-	root   *node[T, A, AP]
+type AugBTree[K, V, A any, AP Aug[K, A]] struct {
+	root   *node[K, V, A, AP]
 	length int
+	cmp    func(K, K) int
+}
+
+func MakeBTree[K, V, A any, AP Aug[K, A]](cmp func(K, K) int) AugBTree[K, V, A, AP] {
+	return AugBTree[K, V, A, AP]{cmp: cmp}
 }
 
 // Reset removes all items from the AugBTree. In doing so, it allows memory
 // held by the AugBTree to be recycled. Failure to call this method before
 // letting a AugBTree be GCed is safe in that it won't cause a memory leak,
 // but it will prevent AugBTree nodes from being efficiently re-used.
-func (t *AugBTree[T, A, AP]) Reset() {
+func (t *AugBTree[K, V, A, AP]) Reset() {
 	if t.root != nil {
 		t.root.decRef(true /* recursive */)
 		t.root = nil
@@ -46,7 +47,7 @@ func (t *AugBTree[T, A, AP]) Reset() {
 }
 
 // Clone clones the AugBTree, lazily. It does so in constant time.
-func (t *AugBTree[T, A, AP]) Clone() *AugBTree[T, A, AP] {
+func (t *AugBTree[K, V, A, AP]) Clone() *AugBTree[K, V, A, AP] {
 	c := *t
 	if c.root != nil {
 		// Incrementing the reference count on the root node is sufficient to
@@ -69,11 +70,11 @@ func (t *AugBTree[T, A, AP]) Clone() *AugBTree[T, A, AP] {
 }
 
 // Delete removes an item equal to the passed in item from the tree.
-func (t *AugBTree[T, A, AP]) Delete(item T) (found bool) {
+func (t *AugBTree[K, V, A, AP]) Delete(k K) (found bool) {
 	if t.root == nil || t.root.count == 0 {
 		return false
 	}
-	if _, found, _ = mut(&t.root).remove(item); found {
+	if _, _, found, _ = mut(&t.root).remove(t.cmp, k); found {
 		t.length--
 	}
 	if t.root.count == 0 {
@@ -90,14 +91,15 @@ func (t *AugBTree[T, A, AP]) Delete(item T) (found bool) {
 
 // Set adds the given item to the tree. If an item in the tree already equals
 // the given one, it is replaced with the new item.
-func (t *AugBTree[T, A, AP]) Set(item T) {
+func (t *AugBTree[K, V, A, AP]) Set(item K, value V) {
 	if t.root == nil {
-		t.root = newLeafNode[T, A, AP]()
+		t.root = newLeafNode[K, V, A, AP]()
 	} else if t.root.count >= MaxItems {
-		splitLa, splitNode := mut(&t.root).split(MaxItems / 2)
-		newRoot := newNode[T, A, AP]()
+		splitLaK, splitLaV, splitNode := mut(&t.root).split(MaxItems / 2)
+		newRoot := newNode[K, V, A, AP]()
 		newRoot.count = 1
-		newRoot.items[0] = splitLa
+		newRoot.items[0] = splitLaK
+		newRoot.values[0] = splitLaV
 		newRoot.children[0] = t.root
 		AP(&t.root.aug).Update(t.root)
 		AP(&splitNode.aug).Update(splitNode)
@@ -105,7 +107,7 @@ func (t *AugBTree[T, A, AP]) Set(item T) {
 		AP(&newRoot.aug).Update(newRoot)
 		t.root = newRoot
 	}
-	if replaced, _ := mut(&t.root).insert(item); !replaced {
+	if replaced, _ := mut(&t.root).insert(t.cmp, item, value); !replaced {
 		t.length++
 	}
 }
@@ -113,14 +115,14 @@ func (t *AugBTree[T, A, AP]) Set(item T) {
 // MakeIter returns a new Iterator object. It is not safe to continue using an
 // Iterator after modifications are made to the tree. If modifications are made,
 // create a new Iterator.
-func (t *AugBTree[T, A, AP]) MakeIter() Iterator[T, A, AP] {
-	it := Iterator[T, A, AP]{r: t.root}
+func (t *AugBTree[K, V, A, AP]) MakeIter() Iterator[K, V, A, AP] {
+	it := Iterator[K, V, A, AP]{r: t}
 	it.Reset()
 	return it
 }
 
 // Height returns the height of the tree.
-func (t *AugBTree[T, A, AP]) Height() int {
+func (t *AugBTree[K, V, A, AP]) Height() int {
 	if t.root == nil {
 		return 0
 	}
@@ -134,13 +136,13 @@ func (t *AugBTree[T, A, AP]) Height() int {
 }
 
 // Len returns the number of items currently in the tree.
-func (t *AugBTree[T, A, AP]) Len() int {
+func (t *AugBTree[K, V, A, AP]) Len() int {
 	return t.length
 }
 
 // String returns a string description of the tree. The format is
 // similar to the https://en.wikipedia.org/wiki/Newick_format.
-func (t *AugBTree[T, A, AP]) String() string {
+func (t *AugBTree[K, V, A, AP]) String() string {
 	if t.length == 0 {
 		return ";"
 	}

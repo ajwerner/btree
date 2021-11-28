@@ -16,9 +16,9 @@ type Node[A any] interface {
 // Aug is a data structure which augments a node of the tree. It is updated
 // when the structure or contents of the subtree rooted at the current node
 // changes.
-type Aug[T Item[T], A any] interface {
+type Aug[K, A any] interface {
 	*A
 	Update(n Node[*A])
-	UpdateOnInsert(item T, n, child Node[*A]) (updated bool)
-	UpdateOnRemoval(item T, n, child Node[*A]) (updated bool)
+	UpdateOnInsert(item K, n, child Node[*A]) (updated bool)
+	UpdateOnRemoval(item K, n, child Node[*A]) (updated bool)
 }

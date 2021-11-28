@@ -1,28 +1,28 @@
 package abstract
 
 // Iterator is responsible for search and traversal within a AugBTree.
-type Iterator[T Item[T], A any, AP Aug[T, A]] struct {
-	r *node[T, A, AP]
-	iterFrame[T, A, AP]
-	s iterStack[T, A, AP]
+type Iterator[K, V, A any, AP Aug[K, A]] struct {
+	r *AugBTree[K, V, A, AP]
+	iterFrame[K, V, A, AP]
+	s iterStack[K, V, A, AP]
 	// TODO(ajwerner): Add back augmented search
 }
 
-func (i *Iterator[T, A, AP]) Reset() {
-	i.node = i.r
+func (i *Iterator[K, V, A, AP]) Reset() {
+	i.node = i.r.root
 	i.pos = -1
 	i.s.reset()
 }
 
 // SeekGE seeks to the first item greater-than or equal to the provided
 // item.
-func (i *Iterator[T, A, AP]) SeekGE(item T) {
+func (i *Iterator[K, V, A, AP]) SeekGE(item K) {
 	i.Reset()
 	if i.node == nil {
 		return
 	}
 	for {
-		pos, found := i.find(item)
+		pos, found := i.find(i.r.compare, item)
 		i.pos = int16(pos)
 		if found {
 			return
@@ -38,13 +38,13 @@ func (i *Iterator[T, A, AP]) SeekGE(item T) {
 }
 
 // SeekLT seeks to the first item less-than the provided item.
-func (i *Iterator[T, A, AP]) SeekLT(item T) {
+func (i *Iterator[K, V, A, AP]) SeekLT(item K) {
 	i.Reset()
 	if i.node == nil {
 		return
 	}
 	for {
-		pos, found := i.find(item)
+		pos, found := i.find(i.r.compare, item)
 		i.pos = int16(pos)
 		if found || i.leaf {
 			i.Prev()
@@ -55,7 +55,7 @@ func (i *Iterator[T, A, AP]) SeekLT(item T) {
 }
 
 // First seeks to the first item in the AugBTree.
-func (i *Iterator[T, A, AP]) First() {
+func (i *Iterator[K, V, A, AP]) First() {
 	i.Reset()
 	i.pos = 0
 	if i.node == nil {
@@ -68,7 +68,7 @@ func (i *Iterator[T, A, AP]) First() {
 }
 
 // Last seeks to the last item in the AugBTree.
-func (i *Iterator[T, A, AP]) Last() {
+func (i *Iterator[K, V, A, AP]) Last() {
 	i.Reset()
 	if i.node == nil {
 		return
@@ -80,11 +80,11 @@ func (i *Iterator[T, A, AP]) Last() {
 	i.pos = i.count - 1
 }
 
-func (i *Iterator[T, A, AP]) IncrementPos() bool {
+func (i *Iterator[K, V, A, AP]) IncrementPos() bool {
 	return i.SetPos(i.pos + 1)
 }
 
-func (i *Iterator[T, A, AP]) SetPos(pos int16) bool {
+func (i *Iterator[K, V, A, AP]) SetPos(pos int16) bool {
 	if pos <= i.count && pos >= 0 {
 		i.pos = pos
 		return true
@@ -94,7 +94,7 @@ func (i *Iterator[T, A, AP]) SetPos(pos int16) bool {
 
 // Next positions the Iterator to the item immediately following
 // its current position.
-func (i *Iterator[T, A, AP]) Next() {
+func (i *Iterator[K, V, A, AP]) Next() {
 	if i.node == nil {
 		return
 	}
@@ -120,7 +120,7 @@ func (i *Iterator[T, A, AP]) Next() {
 
 // Prev positions the Iterator to the item immediately preceding
 // its current position.
-func (i *Iterator[T, A, AP]) Prev() {
+func (i *Iterator[K, V, A, AP]) Prev() {
 	if i.node == nil {
 		return
 	}
@@ -146,49 +146,53 @@ func (i *Iterator[T, A, AP]) Prev() {
 }
 
 // Valid returns whether the Iterator is positioned at a valid position.
-func (i *Iterator[T, A, AP]) Valid() bool {
+func (i *Iterator[K, V, A, AP]) Valid() bool {
 	return i.pos >= 0 && i.pos < i.count
 }
 
 // Cur returns the item at the Iterator's current position. It is illegal
 // to call Cur if the Iterator is not valid.
-func (i *Iterator[T, A, AP]) Cur() T {
+func (i *Iterator[K, V, A, AP]) Key() K {
 	return i.items[i.pos]
 }
 
-func (i *Iterator[T, A, AP]) IsLeaf() bool {
+func (i *Iterator[K, V, A, AP]) Value() V {
+	return i.values[i.pos]
+}
+
+func (i *Iterator[K, V, A, AP]) IsLeaf() bool {
 	return i.leaf
 }
 
-func (i *Iterator[T, A, AP]) Node() Node[*A] {
+func (i *Iterator[K, V, A, AP]) Node() Node[*A] {
 	return i.node
 }
 
-func (i *Iterator[T, A, AP]) Pos() int16 {
+func (i *Iterator[K, V, A, AP]) Pos() int16 {
 	return i.pos
 }
 
-func (i *Iterator[T, A, AP]) makeFrame(n *node[T, A, AP], pos int16) iterFrame[T, A, AP] {
-	return iterFrame[T, A, AP]{
+func (i *Iterator[K, V, A, AP]) makeFrame(n *node[K, V, A, AP], pos int16) iterFrame[K, V, A, AP] {
+	return iterFrame[K, V, A, AP]{
 		node: n,
 		pos:  pos,
 	}
 }
 
-func (i *Iterator[T, A, AP]) CurChild() Node[*A] {
+func (i *Iterator[K, V, A, AP]) CurChild() Node[*A] {
 	if i.Pos() < 0 || i.IsLeaf() {
 		return nil
 	}
 	return i.children[i.pos]
 }
 
-func (i *Iterator[T, A, AP]) Descend() {
+func (i *Iterator[K, V, A, AP]) Descend() {
 	i.s.push(i.iterFrame)
 	i.iterFrame = i.makeFrame(i.children[i.pos], 0)
 }
 
 // ascend ascends up to the current node's parent and resets the position
 // to the one previously set for this parent node.
-func (i *Iterator[T, A, AP]) Ascend() {
+func (i *Iterator[K, V, A, AP]) Ascend() {
 	i.iterFrame = i.s.pop()
 }
