@@ -42,6 +42,13 @@ func (n *node[T, A, AP]) IterateItems(f func(T)) {
 	}
 }
 
+func (n *node[T, A, AP]) GetChild(i int16) Node[*A] {
+	if !n.leaf && n.children[i] != nil {
+		return n.children[i]
+	}
+	return nil
+}
+
 func (n *node[T, A, AP]) IterateChildren(f func(*A)) {
 	if n.leaf {
 		return
@@ -144,7 +151,7 @@ func (n *node[T, A, AP]) clone() *node[T, A, AP] {
 	// NB: copy field-by-field without touching N.N.ref to avoid
 	// triggering the race detector and looking like a data race.
 	c.count = n.count
-	AP(&n.aug).CopyInto(&c.aug)
+	n.aug = c.aug
 	c.items = n.items
 	if !c.leaf {
 		// Copy children and increase each refcount.

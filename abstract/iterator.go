@@ -14,35 +14,6 @@ func (i *Iterator[T, A, AP]) Reset() {
 	i.s.reset()
 }
 
-func (i *Iterator[T, A, AP]) Pos() int16 {
-	return i.pos
-}
-
-func (i *Iterator[T, A, AP]) makeFrame(n *node[T, A, AP], pos int16) iterFrame[T, A, AP] {
-	return iterFrame[T, A, AP]{
-		node: n,
-		pos:  pos,
-	}
-}
-
-func (i *Iterator[T, A, AP]) CurChild() Node[*A] {
-	if i.Pos() < 0 || i.IsLeaf() {
-		return nil
-	}
-	return i.children[i.pos]
-}
-
-func (i *Iterator[T, A, AP]) Descend() {
-	i.s.push(i.iterFrame)
-	i.iterFrame = i.makeFrame(i.children[i.pos], 0)
-}
-
-// ascend ascends up to the current node's parent and resets the position
-// to the one previously set for this parent node.
-func (i *Iterator[T, A, AP]) Ascend() {
-	i.iterFrame = i.s.pop()
-}
-
 // SeekGE seeks to the first item greater-than or equal to the provided
 // item.
 func (i *Iterator[T, A, AP]) SeekGE(item T) {
@@ -147,14 +118,6 @@ func (i *Iterator[T, A, AP]) Next() {
 	i.pos = 0
 }
 
-func (i *Iterator[T, A, AP]) IsLeaf() bool {
-	return i.leaf
-}
-
-func (i *Iterator[T, A, AP]) Node() Node[*A] {
-	return i.node
-}
-
 // Prev positions the Iterator to the item immediately preceding
 // its current position.
 func (i *Iterator[T, A, AP]) Prev() {
@@ -193,59 +156,39 @@ func (i *Iterator[T, A, AP]) Cur() T {
 	return i.items[i.pos]
 }
 
-// iterStack represents a stack of (node, pos) tuples, which captures
-// iteration state as an Iterator descends a AugBTree.
-type iterStack[T Item[T], A any, AP Aug[T, A]] struct {
-	a    iterStackArr[T, A, AP]
-	aLen int16 // -1 when using s
-	s    []iterFrame[T, A, AP]
+func (i *Iterator[T, A, AP]) IsLeaf() bool {
+	return i.leaf
 }
 
-const iterStackDepth = 6
-
-// Used to avoid allocations for stacks below a certain size.
-type iterStackArr[T Item[T], A any, AP Aug[T, A]] [iterStackDepth]iterFrame[T, A, AP]
-
-type iterFrame[T Item[T], A any, AP Aug[T, A]] struct {
-	*node[T, A, AP]
-	pos int16
+func (i *Iterator[T, A, AP]) Node() Node[*A] {
+	return i.node
 }
 
-func (is *iterStack[T, A, AP]) push(f iterFrame[T, A, AP]) {
-	if is.aLen == -1 {
-		is.s = append(is.s, f)
-	} else if int(is.aLen) == len(is.a) {
-		is.s = make([](iterFrame[T, A, AP]), int(is.aLen)+1, 2*int(is.aLen))
-		copy(is.s, is.a[:])
-		is.s[int(is.aLen)] = f
-		is.aLen = -1
-	} else {
-		is.a[is.aLen] = f
-		is.aLen++
+func (i *Iterator[T, A, AP]) Pos() int16 {
+	return i.pos
+}
+
+func (i *Iterator[T, A, AP]) makeFrame(n *node[T, A, AP], pos int16) iterFrame[T, A, AP] {
+	return iterFrame[T, A, AP]{
+		node: n,
+		pos:  pos,
 	}
 }
 
-func (is *iterStack[T, A, AP]) pop() iterFrame[T, A, AP] {
-	if is.aLen == -1 {
-		f := is.s[len(is.s)-1]
-		is.s = is.s[:len(is.s)-1]
-		return f
+func (i *Iterator[T, A, AP]) CurChild() Node[*A] {
+	if i.Pos() < 0 || i.IsLeaf() {
+		return nil
 	}
-	is.aLen--
-	return is.a[is.aLen]
+	return i.children[i.pos]
 }
 
-func (is *iterStack[T, A, AP]) len() int {
-	if is.aLen == -1 {
-		return len(is.s)
-	}
-	return int(is.aLen)
+func (i *Iterator[T, A, AP]) Descend() {
+	i.s.push(i.iterFrame)
+	i.iterFrame = i.makeFrame(i.children[i.pos], 0)
 }
 
-func (is *iterStack[T, A, AP]) reset() {
-	if is.aLen == -1 {
-		is.s = is.s[:0]
-	} else {
-		is.aLen = 0
-	}
+// ascend ascends up to the current node's parent and resets the position
+// to the one previously set for this parent node.
+func (i *Iterator[T, A, AP]) Ascend() {
+	i.iterFrame = i.s.pop()
 }

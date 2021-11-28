@@ -24,56 +24,6 @@ const (
 // TODO(ajwerner): A KV mapping with comparisons over keys is more general
 // than an object which is both.
 
-type Item[T any] interface {
-	Less(T) bool
-}
-
-// NodeIterator can be utilized by an Aug implementation to iterate the entries
-// in a node.
-type NodeIterator[T Item[T], A any, AP Aug[T, A]] struct {
-	n   *node[T, A, AP]
-	pos int
-}
-
-// Item returns the item at the given position in the node. Valid i values are
-// [0, N.Count()).
-func (ni *NodeIterator[T, A, AP]) Item(i int) *T {
-	return &ni.n.items[i]
-}
-
-// Child returns the child node at the given position in the node. Valid i
-// values are [0, N.Count()]. If N is a leaf node or no child exists at that
-// slot, nil will be returned.
-func (ni *NodeIterator[T, A, AP]) Child(i int) Node[*A] {
-	if !ni.n.leaf && ni.n.children[i] != nil {
-		return ni.n.children[i]
-	}
-	return nil
-}
-
-// InitNodeIterator is used during to interate a node passed to an Aug via
-// an update method. It allows iteration without any allocations.
-func InitNodeIterator[T Item[T], A any, AP Aug[T, A]](ni *NodeIterator[T, A, AP], n Node[*A]) {
-	ni.n = n.(*node[T, A, AP])
-	ni.pos = 0
-}
-
-// TODO(ajwerner): Tighten up this interface and make this more generally
-// efficient for updates where possible.
-type Node[A any] interface {
-	GetA() A
-	Count() int16
-	IsLeaf() bool
-}
-
-type Aug[T Item[T], A any] interface {
-	CopyInto(dest *A)
-	Update(n Node[*A])
-	UpdateOnInsert(item T, n, child Node[*A]) (updated bool)
-	UpdateOnRemoval(item T, n, child Node[*A]) (updated bool)
-	*A
-}
-
 // AugBTree is an implementation of an augmented B-Tree.
 //
 // Write operations are not safe for concurrent mutation by multiple
