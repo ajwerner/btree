@@ -30,12 +30,12 @@ func (a *intervalAug[K, I]) UpdateOnRemoval(
 }
 
 type IntervalTree[K, V any, I Interval[K]] struct {
-	t abstract.AugBTree[I, V, intervalAug[K, I], *intervalAug[K, I]]
+	t abstract.Map[I, V, intervalAug[K, I], *intervalAug[K, I]]
 }
 
-func NewMap[K, V any, I Interval[K]](cmp func(K, K) int) IntervalTree[K, V, I] {
+func NewMap[I Interval[K], V, K any](cmp func(K, K) int) IntervalTree[K, V, I] {
 	return IntervalTree[K, V, I]{
-		t: abstract.MakeBTree[I, V, intervalAug[K, I]](intervalCmp[K, I](cmp)),
+		t: abstract.MakeMap[I, V, intervalAug[K, I]](intervalCmp[K, I](cmp)),
 	}
 }
 
@@ -48,11 +48,11 @@ func intervalCmp[K any, I Interval[K]](f func(K, K) int) func(I, I) int {
 	}
 }
 
-func (t *IntervalTree[K, V, I]) Set(k I, v V) {
-	t.t.Set(k, v)
+func (t *IntervalTree[K, V, I]) Upsert(k I, v V) {
+	t.t.Upsert(k, v)
 }
 
-type IntervalIterator[K, V any, I Interval[K]] struct {
+type Iterator[K, V any, I Interval[K]] struct {
 	it abstract.Iterator[I, V, intervalAug[K, I], *intervalAug[K, I]]
 
 	// The "soft" lower-bound constraint.
@@ -65,24 +65,24 @@ type IntervalIterator[K, V any, I Interval[K]] struct {
 	constrMaxPos int16
 }
 
-func (t *IntervalTree[K, V, I]) MakeIter() IntervalIterator[K, V, I] {
-	return IntervalIterator[K, V, I]{
+func (t *IntervalTree[K, V, I]) MakeIter() Iterator[K, V, I] {
+	return Iterator[K, V, I]{
 		it: t.t.MakeIter(),
 	}
 }
 
-func (it *IntervalIterator[K, V, I]) First() {
+func (it *Iterator[K, V, I]) First() {
 	it.it.First()
 }
 
-func (it *IntervalIterator[K, V, I]) Next() {
+func (it *Iterator[K, V, I]) Next() {
 	it.it.Next()
 }
 
-func (it *IntervalIterator[K, V, I]) Valid() bool {
+func (it *Iterator[K, V, I]) Valid() bool {
 	return it.it.Valid()
 }
 
-func (it *IntervalIterator[K, V, I]) Key() I {
+func (it *Iterator[K, V, I]) Key() I {
 	return it.it.Key()
 }

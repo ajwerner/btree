@@ -24,16 +24,16 @@ func TestBTree(t *testing.T) {
 		}
 	}
 
-	tree := New[int, struct{}](Compare[int])
-	tree.Insert(2, struct{}{})
-	tree.Insert(12, struct{}{})
-	tree.Insert(1, struct{}{})
+	tree := NewSet(Compare[int])
+	tree.Upsert(2)
+	tree.Upsert(12)
+	tree.Upsert(1)
 
-	iter := tree.MakeIter()
-	iter.First()
-	for _, exp := range []int{1, 2, 12} {
-		assertEq(t, exp, iter.Key())
-		iter.Next()
+	it := tree.Iterator()
+	it.First()
+	expected := []int{1, 2, 12}
+	for _, exp := range expected {
+		assertEq(t, exp, it.Key())
+		it.Next()
 	}
-
 }
