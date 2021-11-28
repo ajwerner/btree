@@ -2,35 +2,35 @@ package orderstat
 
 import "github.com/ajwerner/btree/new/abstract"
 
-type OrderStatTree[T abstract.Item[T]] struct {
-	t abstract.AugBTree[T, aug[T], *aug[T]]
+type OrderStatTree[K, V any] struct {
+	t abstract.AugBTree[K, V, aug[K], *aug[K]]
 }
 
-func MakeOrderStatTree[T abstract.Item[T]]() *OrderStatTree[T] {
-	return &OrderStatTree[T]{
-		abstract.AugBTree[T, aug[T], *aug[T]]{},
+func MakeOrderStatTree[K, V any](cmp func(K, K) int) *OrderStatTree[K, V] {
+	return &OrderStatTree[K, V]{
+		t: abstract.MakeBTree[K, V, aug[K]](cmp),
 	}
 }
 
-func (t *OrderStatTree[T]) Set(v T) {
-	t.t.Set(v)
+func (t *OrderStatTree[K, V]) Set(k K, v V) {
+	t.t.Set(k, v)
 }
 
-func (t *OrderStatTree[T]) Remove(v T) (removed bool) {
-	return t.t.Delete(v)
+func (t *OrderStatTree[K, V]) Remove(k K) (removed bool) {
+	return t.t.Delete(k)
 }
 
-type OrderStatIterator[T abstract.Item[T]] struct {
-	it abstract.Iterator[T, aug[T], *aug[T]]
+type OrderStatIterator[K, V any] struct {
+	it abstract.Iterator[K, V, aug[K], *aug[K]]
 }
 
-func (t *OrderStatTree[T]) MakeIter() OrderStatIterator[T] {
-	return OrderStatIterator[T]{
+func (t *OrderStatTree[K, V]) MakeIter() OrderStatIterator[K, V] {
+	return OrderStatIterator[K, V]{
 		it: t.t.MakeIter(),
 	}
 }
 
-func (it *OrderStatIterator[T]) Nth(i int) {
+func (it *OrderStatIterator[K, V]) Nth(i int) {
 	// Reset has bizarre semantics in that it initializes the iterator to
 	// an invalid position (-1) at the root of the tree. IncrementPos moves it
 	// to the first child and item of the
@@ -60,8 +60,8 @@ func (it *OrderStatIterator[T]) Nth(i int) {
 	}
 }
 
-func (it *OrderStatIterator[T]) First()      { it.it.First() }
-func (it *OrderStatIterator[T]) Last()       { it.it.First() }
-func (it *OrderStatIterator[T]) Next()       { it.it.Next() }
-func (it *OrderStatIterator[T]) Valid() bool { return it.it.Valid() }
-func (it *OrderStatIterator[T]) Cur() T      { return it.it.Cur() }
+func (it *OrderStatIterator[K, V]) First()      { it.it.First() }
+func (it *OrderStatIterator[K, V]) Last()       { it.it.First() }
+func (it *OrderStatIterator[K, V]) Next()       { it.it.Next() }
+func (it *OrderStatIterator[K, V]) Valid() bool { return it.it.Valid() }
+func (it *OrderStatIterator[K, V]) Key() K      { return it.it.Key() }

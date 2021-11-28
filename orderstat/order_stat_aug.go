@@ -2,7 +2,7 @@ package orderstat
 
 import "github.com/ajwerner/btree/new/abstract"
 
-type aug[T abstract.Item[T]] struct {
+type aug[K any] struct {
 	// children is the number of items rooted at the current subtree.
 	children int
 }
