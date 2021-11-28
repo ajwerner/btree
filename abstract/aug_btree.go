@@ -8,9 +8,9 @@ import (
 // compile-time constant.
 
 const (
-	Degree   = 2
-	MaxItems = 2*Degree - 1
-	MinItems = Degree - 1
+	Degree     = 2
+	MaxEntries = 2*Degree - 1
+	MinEntries = Degree - 1
 )
 
 // TODO(ajwerner): Probably we want comparison to occur on pointers to the
@@ -94,11 +94,11 @@ func (t *AugBTree[K, V, A, AP]) Delete(k K) (found bool) {
 func (t *AugBTree[K, V, A, AP]) Set(item K, value V) {
 	if t.root == nil {
 		t.root = newLeafNode[K, V, A, AP]()
-	} else if t.root.count >= MaxItems {
-		splitLaK, splitLaV, splitNode := mut(&t.root).split(MaxItems / 2)
+	} else if t.root.count >= MaxEntries {
+		splitLaK, splitLaV, splitNode := mut(&t.root).split(MaxEntries / 2)
 		newRoot := newNode[K, V, A, AP]()
 		newRoot.count = 1
-		newRoot.items[0] = splitLaK
+		newRoot.keys[0] = splitLaK
 		newRoot.values[0] = splitLaV
 		newRoot.children[0] = t.root
 		AP(&t.root.aug).Update(t.root)
