@@ -339,15 +339,18 @@ func (n *node[K, V, A, AP]) update() {
 // nodes in the suAugBTree exceed MaxEntries keys. Returns true if an existing item
 // was replaced and false if an item was inserted. Also returns whether the
 // node's upper bound changes.
-func (n *node[K, V, A, AP]) insert(cmp func(K, K) int, item K, value V) (replaced, newBound bool) {
+func (n *node[K, V, A, AP]) insert(cmp func(K, K) int, item K, value V) (replacedK K, replacedV V, replaced, newBound bool) {
 	i, found := n.find(cmp, item)
 	if found {
+		replacedV = n.values[i]
+		replacedK = n.keys[i]
 		n.keys[i] = item
-		return true, false
+		n.values[i] = value
+		return replacedK, replacedV, true, false
 	}
 	if n.leaf {
 		n.insertAt(i, item, value, nil)
-		return false, AP(&n.aug).UpdateOnInsert(item, n, nil)
+		return replacedK, replacedV, false, AP(&n.aug).UpdateOnInsert(item, n, nil)
 	}
 	if n.children[i].count >= MaxEntries {
 		splitLK, splitLV, splitNode := mut(&n.children[i]).split(MaxEntries / 2)
@@ -359,15 +362,18 @@ func (n *node[K, V, A, AP]) insert(cmp func(K, K) int, item K, value V) (replace
 		} else {
 			// TODO(ajwerner): add something to the augmentation api to
 			// deal with replacement.
+			replacedV = n.values[i]
+			replacedK = n.keys[i]
 			n.keys[i] = item
-			return true, false
+			n.values[i] = value
+			return replacedK, replacedV, true, false
 		}
 	}
-	replaced, newBound = mut(&n.children[i]).insert(cmp, item, value)
+	replacedK, replacedV, replaced, newBound = mut(&n.children[i]).insert(cmp, item, value)
 	if newBound {
 		newBound = AP(&n.aug).UpdateOnInsert(item, n, nil)
 	}
-	return replaced, newBound
+	return replacedK, replacedV, replaced, newBound
 }
 
 // removeMax removes and returns the maximum item from the suAugBTree rooted at

@@ -2,7 +2,7 @@ package abstract
 
 // Iterator is responsible for search and traversal within a AugBTree.
 type Iterator[K, V, A any, AP Aug[K, A]] struct {
-	r *AugBTree[K, V, A, AP]
+	r *Map[K, V, A, AP]
 	iterFrame[K, V, A, AP]
 	s iterStack[K, V, A, AP]
 	// TODO(ajwerner): Add back augmented search
@@ -14,15 +14,15 @@ func (i *Iterator[K, V, A, AP]) Reset() {
 	i.s.reset()
 }
 
-// SeekGE seeks to the first item greater-than or equal to the provided
-// item.
-func (i *Iterator[K, V, A, AP]) SeekGE(item K) {
+// SeekGE seeks to the first key greater-than or equal to the provided
+// key.
+func (i *Iterator[K, V, A, AP]) SeekGE(key K) {
 	i.Reset()
 	if i.node == nil {
 		return
 	}
 	for {
-		pos, found := i.find(i.r.cmp, item)
+		pos, found := i.find(i.r.cmp, key)
 		i.pos = int16(pos)
 		if found {
 			return
@@ -37,14 +37,14 @@ func (i *Iterator[K, V, A, AP]) SeekGE(item K) {
 	}
 }
 
-// SeekLT seeks to the first item less-than the provided item.
-func (i *Iterator[K, V, A, AP]) SeekLT(item K) {
+// SeekLT seeks to the first key less-than the provided key.
+func (i *Iterator[K, V, A, AP]) SeekLT(key K) {
 	i.Reset()
 	if i.node == nil {
 		return
 	}
 	for {
-		pos, found := i.find(i.r.cmp, item)
+		pos, found := i.find(i.r.cmp, key)
 		i.pos = int16(pos)
 		if found || i.leaf {
 			i.Prev()
@@ -54,7 +54,7 @@ func (i *Iterator[K, V, A, AP]) SeekLT(item K) {
 	}
 }
 
-// First seeks to the first item in the AugBTree.
+// First seeks to the first key in the AugBTree.
 func (i *Iterator[K, V, A, AP]) First() {
 	i.Reset()
 	i.pos = 0
@@ -67,7 +67,7 @@ func (i *Iterator[K, V, A, AP]) First() {
 	i.pos = 0
 }
 
-// Last seeks to the last item in the AugBTree.
+// Last seeks to the last key in the AugBTree.
 func (i *Iterator[K, V, A, AP]) Last() {
 	i.Reset()
 	if i.node == nil {
@@ -92,7 +92,7 @@ func (i *Iterator[K, V, A, AP]) SetPos(pos int16) bool {
 	return false
 }
 
-// Next positions the Iterator to the item immediately following
+// Next positions the Iterator to the key immediately following
 // its current position.
 func (i *Iterator[K, V, A, AP]) Next() {
 	if i.node == nil {
@@ -118,7 +118,7 @@ func (i *Iterator[K, V, A, AP]) Next() {
 	i.pos = 0
 }
 
-// Prev positions the Iterator to the item immediately preceding
+// Prev positions the Iterator to the key immediately preceding
 // its current position.
 func (i *Iterator[K, V, A, AP]) Prev() {
 	if i.node == nil {
@@ -150,7 +150,7 @@ func (i *Iterator[K, V, A, AP]) Valid() bool {
 	return i.pos >= 0 && i.pos < i.count
 }
 
-// Cur returns the item at the Iterator's current position. It is illegal
+// Cur returns the key at the Iterator's current position. It is illegal
 // to call Cur if the Iterator is not valid.
 func (i *Iterator[K, V, A, AP]) Key() K {
 	return i.keys[i.pos]
@@ -179,11 +179,11 @@ func (i *Iterator[K, V, A, AP]) makeFrame(n *node[K, V, A, AP], pos int16) iterF
 	}
 }
 
-func (i *Iterator[K, V, A, AP]) CurChild() Node[*A] {
+func (i *Iterator[K, V, A, AP]) Child() (a A, ok bool) {
 	if i.Pos() < 0 || i.IsLeaf() {
-		return nil
+		return a, false
 	}
-	return i.children[i.pos]
+	return i.children[i.pos].aug, true
 }
 
 func (i *Iterator[K, V, A, AP]) Descend() {
