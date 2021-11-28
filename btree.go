@@ -3,12 +3,12 @@ package btree
 import "github.com/ajwerner/btree/new/abstract"
 
 type Map[K, V any] struct {
-	t abstract.Map[K, V, aug[K], *aug[K]]
+	t abstract.Map[K, V, struct{}, aug[K], *aug[K]]
 }
 
 func NewMap[K, V any](cmp func(K, K) int) *Map[K, V] {
 	return &Map[K, V]{
-		t: abstract.MakeMap[K, V, aug[K]](cmp),
+		t: abstract.MakeMap[K, V, struct{}, aug[K]](struct{}{}, cmp),
 	}
 }
 
@@ -27,12 +27,12 @@ func (t *Map[K, V]) Iterator() Iterator[K, V] {
 }
 
 type Set[K any] struct {
-	t abstract.Map[K, struct{}, aug[K], *aug[K]]
+	t abstract.Map[K, struct{}, struct{}, aug[K], *aug[K]]
 }
 
 func NewSet[K any](cmp func(K, K) int) *Set[K] {
 	return &Set[K]{
-		t: abstract.MakeMap[K, struct{}, aug[K]](cmp),
+		t: abstract.MakeMap[K, struct{}, struct{}, aug[K]](struct{}{}, cmp),
 	}
 }
 
@@ -51,7 +51,7 @@ func (t *Set[K]) Iterator() Iterator[K, struct{}] {
 }
 
 type Iterator[K, V any] struct {
-	it abstract.Iterator[K, V, aug[K], *aug[K]]
+	it abstract.Iterator[K, V, struct{}, aug[K], *aug[K]]
 }
 
 func (it *Iterator[K, V]) First()      { it.it.First() }
@@ -66,11 +66,6 @@ func (it *Iterator[K, V]) Value() V    { return it.it.Value() }
 
 type aug[K any] struct{}
 
-func (a *aug[T]) Update(n abstract.Node[*aug[T]]) {}
-
-func (a *aug[T]) UpdateOnInsert(item T, n, child abstract.Node[*aug[T]]) (updated bool) {
-	return false
-}
-func (a *aug[T]) UpdateOnRemoval(item T, n, child abstract.Node[*aug[T]]) (updated bool) {
+func (a *aug[T]) Update(n abstract.Node[*aug[T]], md abstract.UpdateMeta[T, struct{}, aug[T]]) bool {
 	return false
 }

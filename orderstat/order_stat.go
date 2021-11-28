@@ -7,22 +7,22 @@ import (
 )
 
 type Map[K, V any] struct {
-	t abstract.Map[K, V, aug[K], *aug[K]]
+	t abstract.Map[K, V, struct{}, aug[K], *aug[K]]
 }
 
 func NewMap[K, V any](cmp func(K, K) int) *Map[K, V] {
 	return &Map[K, V]{
-		t: abstract.MakeMap[K, V, aug[K]](cmp),
+		t: abstract.MakeMap[K, V, struct{}, aug[K]](struct{}{}, cmp),
 	}
 }
 
 type Set[K any] struct {
-	t abstract.Map[K, struct{}, aug[K], *aug[K]]
+	t abstract.Map[K, struct{}, struct{}, aug[K], *aug[K]]
 }
 
 func NewSet[K any](cmp func(K, K) int) *Set[K] {
 	return &Set[K]{
-		t: abstract.MakeMap[K, struct{}, aug[K]](cmp),
+		t: abstract.MakeMap[K, struct{}, struct{}, aug[K]](struct{}{}, cmp),
 	}
 }
 
@@ -47,7 +47,7 @@ func (t *Map[K, V]) Delete(k K) (removedVal V, removed bool) {
 }
 
 type Iterator[K, V any] struct {
-	it abstract.Iterator[K, V, aug[K], *aug[K]]
+	it abstract.Iterator[K, V, struct{}, aug[K], *aug[K]]
 }
 
 func (t *Map[K, V]) Iterator() Iterator[K, V] {

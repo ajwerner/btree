@@ -16,9 +16,26 @@ type Node[A any] interface {
 // Aug is a data structure which augments a node of the tree. It is updated
 // when the structure or contents of the subtree rooted at the current node
 // changes.
-type Aug[K, A any] interface {
+type Aug[K, Aux, A any] interface {
 	*A
-	Update(n Node[*A])
-	UpdateOnInsert(item K, n, child Node[*A]) (updated bool)
-	UpdateOnRemoval(item K, n, child Node[*A]) (updated bool)
+	Update(Node[*A], UpdateMeta[K, Aux, A]) (changed bool)
+}
+
+type Action int
+
+const (
+	Default Action = iota
+	Split
+	Removal
+	Insertion
+)
+
+type UpdateMeta[K, Aux, A any] struct {
+	Aux Aux
+
+	// Action indicates the semantics of the below fields. If Default,
+	// no fields will be populated.
+	Action        Action
+	ModifiedOther *A
+	RelevantKey   K
 }

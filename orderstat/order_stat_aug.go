@@ -10,7 +10,10 @@ type aug[K any] struct {
 func (a *aug[T]) CopyInto(dest *aug[T]) { *dest = *a }
 
 // Update will update the count for the current node.
-func (a *aug[T]) Update(n abstract.Node[*aug[T]]) {
+func (a *aug[T]) Update(
+	n abstract.Node[*aug[T]], _ abstract.UpdateMeta[T, struct{}, aug[T]],
+) (updated bool) {
+	orig := a.children
 	var children int
 	if !n.IsLeaf() {
 		N := n.Count()
@@ -22,22 +25,5 @@ func (a *aug[T]) Update(n abstract.Node[*aug[T]]) {
 	}
 	children += int(n.Count())
 	a.children = children
-}
-
-func (a *aug[T]) UpdateOnInsert(
-	item T,
-	n, child abstract.Node[*aug[T]],
-) (updated bool) {
-	// TODO(ajwerner): optimize this.
-	a.Update(n)
-	return true
-}
-
-func (a *aug[T]) UpdateOnRemoval(
-	item T,
-	n, child abstract.Node[*aug[T]],
-) (updated bool) {
-	// TODO(ajwerner): optimize this.
-	a.Update(n)
-	return true
+	return a.children != orig
 }
