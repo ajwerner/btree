@@ -1,23 +1,25 @@
 package interval
 
-/*
 import (
+	"constraints"
 	"testing"
 )
 
-type IntInterval [2]int
-
-func (i IntInterval) Key() Int { return Int(i[0]) }
-func (i IntInterval) End() Int { return Int(i[1]) }
-
-func (i IntInterval) Less(o IntInterval) bool {
-	if i[0] == o[0] {
-		return i[1] < o[1]
+func Compare[T constraints.Ordered](a, b T) int {
+	switch {
+	case a < b:
+		return -1
+	case a == b:
+		return 0
+	default:
+		return 1
 	}
-	return i[0] < o[0]
 }
 
-type _[A any] interface{}
+type IntInterval [2]int
+
+func (i IntInterval) Key() int { return i[0] }
+func (i IntInterval) End() int { return i[1] }
 
 func TestIntervalTree(t *testing.T) {
 	assertEq := func(t *testing.T, exp, got IntInterval) {
@@ -26,17 +28,15 @@ func TestIntervalTree(t *testing.T) {
 			t.Fatalf("expected %d, got %d", exp, got)
 		}
 	}
-	tree := MakeIntervalTree[Int, IntInterval]()
-	tree.Set(IntInterval{1, 2})
-	tree.Set(IntInterval{2, 4})
-	tree.Set(IntInterval{3, 4})
-	tree.Set(IntInterval{3, 3})
-	tree.Set(IntInterval{2, 3})
+	tree := NewMap[int, struct{}, IntInterval](Compare[int])
+	items := []IntInterval{{1, 2}, {2, 3}, {2, 4}, {3, 3}, {3, 4}}
+	for _, item := range items {
+		tree.Set(item, struct{}{})
+	}
 	iter := tree.MakeIter()
 	iter.First()
-	for _, exp := range []IntInterval{{1, 2}, {2, 3}, {2, 4}, {3, 3}, {3, 4}} {
-		assertEq(t, exp, iter.Cur())
+	for _, exp := range items {
+		assertEq(t, exp, iter.Key())
 		iter.Next()
 	}
 }
-*/

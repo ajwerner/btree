@@ -22,7 +22,7 @@ func (i *Iterator[K, V, A, AP]) SeekGE(item K) {
 		return
 	}
 	for {
-		pos, found := i.find(i.r.compare, item)
+		pos, found := i.find(i.r.cmp, item)
 		i.pos = int16(pos)
 		if found {
 			return
@@ -44,7 +44,7 @@ func (i *Iterator[K, V, A, AP]) SeekLT(item K) {
 		return
 	}
 	for {
-		pos, found := i.find(i.r.compare, item)
+		pos, found := i.find(i.r.cmp, item)
 		i.pos = int16(pos)
 		if found || i.leaf {
 			i.Prev()
@@ -153,7 +153,7 @@ func (i *Iterator[K, V, A, AP]) Valid() bool {
 // Cur returns the item at the Iterator's current position. It is illegal
 // to call Cur if the Iterator is not valid.
 func (i *Iterator[K, V, A, AP]) Key() K {
-	return i.items[i.pos]
+	return i.keys[i.pos]
 }
 
 func (i *Iterator[K, V, A, AP]) Value() V {
