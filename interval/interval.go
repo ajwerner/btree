@@ -9,37 +9,49 @@ type Interval[K any] interface {
 	End() K
 }
 
-type intervalAug[K any, I Interval[K]] struct{}
-
-func (a *intervalAug[K, I]) Update(n abstract.Node[*intervalAug[K, I]]) {
+type IntervalWithID[K, ID any] interface {
+	Interval[K]
+	ID() ID
 }
 
-func (a *intervalAug[K, I]) UpdateOnInsert(
-	item I,
-	n, child abstract.Node[*intervalAug[K, I]],
-) (updated bool) {
-
-	return false
+type kBound[K any] struct {
+	k         K
+	inclusive bool
 }
 
-func (a *intervalAug[K, I]) UpdateOnRemoval(
-	item I,
-	n, child abstract.Node[*intervalAug[K, I]],
-) (updated bool) {
+type aug[K any, I Interval[K]] struct {
+	kBound[K]
+}
+
+func (a *aug[K, I]) Update(n abstract.Node[*aug[K, I]], md abstract.UpdateMeta[I, CompareFn[K], aug[K, I]]) (updated bool) {
 	return false
 }
 
 type IntervalTree[K, V any, I Interval[K]] struct {
-	t abstract.Map[I, V, intervalAug[K, I], *intervalAug[K, I]]
+	t abstract.Map[I, V, CompareFn[K], aug[K, I], *aug[K, I]]
 }
 
-func NewMap[I Interval[K], V, K any](cmp func(K, K) int) IntervalTree[K, V, I] {
+func NewMap[I Interval[K], V, K any](cmpK CompareFn[K], cmpI CompareFn[I]) IntervalTree[K, V, I] {
 	return IntervalTree[K, V, I]{
-		t: abstract.MakeMap[I, V, intervalAug[K, I]](intervalCmp[K, I](cmp)),
+		t: abstract.MakeMap[I, V, CompareFn[K], aug[K, I]](cmpK, cmpI),
 	}
 }
 
-func intervalCmp[K any, I Interval[K]](f func(K, K) int) func(I, I) int {
+type CompareFn[T any] func(T, T) int
+
+func IntervalIDCompare[K, ID any, I IntervalWithID[K, ID]](cmpK CompareFn[K], cmpID CompareFn[ID]) CompareFn[I] {
+	return func(a, b I) int {
+		if c := cmpK(a.Key(), b.Key()); c != 0 {
+			return c
+		}
+		if c := cmpK(a.End(), b.End()); c != 0 {
+			return c
+		}
+		return cmpID(a.ID(), b.ID())
+	}
+}
+
+func IntervalCompare[I Interval[K], K any](f func(K, K) int) func(I, I) int {
 	return func(a, b I) int {
 		if c := f(a.Key(), b.Key()); c != 0 {
 			return c
@@ -53,15 +65,15 @@ func (t *IntervalTree[K, V, I]) Upsert(k I, v V) {
 }
 
 type Iterator[K, V any, I Interval[K]] struct {
-	it abstract.Iterator[I, V, intervalAug[K, I], *intervalAug[K, I]]
+	it abstract.Iterator[I, V, CompareFn[K], aug[K, I], *aug[K, I]]
 
 	// The "soft" lower-bound constraint.
-	constrMinN       abstract.Node[intervalAug[K, I]]
+	constrMinN       abstract.Node[aug[K, I]]
 	constrMinPos     int16
 	constrMinReached bool
 
 	// The "hard" upper-bound constraint.
-	constrMaxN   abstract.Node[intervalAug[K, I]]
+	constrMaxN   abstract.Node[aug[K, I]]
 	constrMaxPos int16
 }
 

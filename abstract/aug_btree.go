@@ -24,21 +24,25 @@ const (
 //
 // Write operations are not safe for concurrent mutation by multiple
 // goroutines, but Read operations are.
-type Map[K, V, A any, AP Aug[K, A]] struct {
-	root   *node[K, V, A, AP]
+type Map[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
+	root   *node[K, V, Aux, A, AP]
 	length int
+	aux    Aux
 	cmp    func(K, K) int
 }
 
-func MakeMap[K, V, A any, AP Aug[K, A]](cmp func(K, K) int) Map[K, V, A, AP] {
-	return Map[K, V, A, AP]{cmp: cmp}
+func MakeMap[K, V, Aux, A any, AP Aug[K, Aux, A]](aux Aux, cmp func(K, K) int) Map[K, V, Aux, A, AP] {
+	return Map[K, V, Aux, A, AP]{
+		cmp: cmp,
+		aux: aux,
+	}
 }
 
 // Reset removes all items from the AugBTree. In doing so, it allows memory
 // held by the AugBTree to be recycled. Failure to call this method before
 // letting a AugBTree be GCed is safe in that it won't cause a memory leak,
 // but it will prevent AugBTree nodes from being efficiently re-used.
-func (t *Map[K, V, A, AP]) Reset() {
+func (t *Map[K, V, Aux, A, AP]) Reset() {
 	if t.root != nil {
 		t.root.decRef(true /* recursive */)
 		t.root = nil
@@ -47,7 +51,7 @@ func (t *Map[K, V, A, AP]) Reset() {
 }
 
 // Clone clones the AugBTree, lazily. It does so in constant time.
-func (t *Map[K, V, A, AP]) Clone() *Map[K, V, A, AP] {
+func (t *Map[K, V, Aux, A, AP]) Clone() *Map[K, V, Aux, A, AP] {
 	c := *t
 	if c.root != nil {
 		// Incrementing the reference count on the root node is sufficient to
@@ -70,11 +74,11 @@ func (t *Map[K, V, A, AP]) Clone() *Map[K, V, A, AP] {
 }
 
 // Delete removes an item equal to the passed in item from the tree.
-func (t *Map[K, V, A, AP]) Delete(k K) (removedK K, v V, found bool) {
+func (t *Map[K, V, Aux, A, AP]) Delete(k K) (removedK K, v V, found bool) {
 	if t.root == nil || t.root.count == 0 {
 		return removedK, v, false
 	}
-	if removedK, v, found, _ = mut(&t.root).remove(t.cmp, k); found {
+	if removedK, v, found, _ = mut(&t.root).remove(t.aux, t.cmp, k); found {
 		t.length--
 	}
 	if t.root.count == 0 {
@@ -91,23 +95,23 @@ func (t *Map[K, V, A, AP]) Delete(k K) (removedK K, v V, found bool) {
 
 // Upsert adds the given item to the tree. If an item in the tree already equals
 // the given one, it is replaced with the new item.
-func (t *Map[K, V, A, AP]) Upsert(item K, value V) (replacedK K, replacedV V, replaced bool) {
+func (t *Map[K, V, Aux, A, AP]) Upsert(item K, value V) (replacedK K, replacedV V, replaced bool) {
 	if t.root == nil {
-		t.root = newLeafNode[K, V, A, AP]()
+		t.root = newLeafNode[K, V, Aux, A, AP]()
 	} else if t.root.count >= MaxEntries {
-		splitLaK, splitLaV, splitNode := mut(&t.root).split(MaxEntries / 2)
-		newRoot := newNode[K, V, A, AP]()
+		splitLaK, splitLaV, splitNode := mut(&t.root).split(t.aux, MaxEntries/2)
+		newRoot := newNode[K, V, Aux, A, AP]()
 		newRoot.count = 1
 		newRoot.keys[0] = splitLaK
 		newRoot.values[0] = splitLaV
 		newRoot.children[0] = t.root
-		AP(&t.root.aug).Update(t.root)
-		AP(&splitNode.aug).Update(splitNode)
+		t.root.update(t.aux)
+		splitNode.update(t.aux)
 		newRoot.children[1] = splitNode
-		AP(&newRoot.aug).Update(newRoot)
+		newRoot.update(t.aux)
 		t.root = newRoot
 	}
-	replacedK, replacedV, replaced, _ = mut(&t.root).insert(t.cmp, item, value)
+	replacedK, replacedV, replaced, _ = mut(&t.root).insert(t.aux, t.cmp, item, value)
 	if !replaced {
 		t.length++
 	}
@@ -117,14 +121,14 @@ func (t *Map[K, V, A, AP]) Upsert(item K, value V) (replacedK K, replacedV V, re
 // MakeIter returns a new Iterator object. It is not safe to continue using an
 // Iterator after modifications are made to the tree. If modifications are made,
 // create a new Iterator.
-func (t *Map[K, V, A, AP]) MakeIter() Iterator[K, V, A, AP] {
-	it := Iterator[K, V, A, AP]{r: t}
+func (t *Map[K, V, Aux, A, AP]) MakeIter() Iterator[K, V, Aux, A, AP] {
+	it := Iterator[K, V, Aux, A, AP]{r: t}
 	it.Reset()
 	return it
 }
 
 // Height returns the height of the tree.
-func (t *Map[K, V, A, AP]) Height() int {
+func (t *Map[K, V, Aux, A, AP]) Height() int {
 	if t.root == nil {
 		return 0
 	}
@@ -138,13 +142,13 @@ func (t *Map[K, V, A, AP]) Height() int {
 }
 
 // Len returns the number of items currently in the tree.
-func (t *Map[K, V, A, AP]) Len() int {
+func (t *Map[K, V, Aux, A, AP]) Len() int {
 	return t.length
 }
 
 // String returns a string description of the tree. The format is
 // similar to the https://en.wikipedia.org/wiki/Newick_format.
-func (t *Map[K, V, A, AP]) String() string {
+func (t *Map[K, V, Aux, A, AP]) String() string {
 	if t.length == 0 {
 		return ";"
 	}
