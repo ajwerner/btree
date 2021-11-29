@@ -22,10 +22,11 @@ type aug[K any, I Interval[K]] struct {
 }
 
 func (a *aug[K, I]) Update(
+	cfg *abstract.Config[I, config[K]],
 	n abstract.Node[I, *aug[K, I]],
-	md abstract.UpdateMeta[I, CompareFn[K], aug[K, I]],
+	md abstract.UpdateMeta[I, aug[K, I]],
 ) (updated bool) {
-	cmp := md.Aux
+	cmp := cfg.Config.compareK
 	switch md.Action {
 	case abstract.Insertion:
 		up := upperBound(md.RelevantKey, cmp)
@@ -72,7 +73,7 @@ type keyBound[K any] struct {
 	inclusive bool
 }
 
-func upperBound[I Interval[K], K any](interval I, f CompareFn[K]) keyBound[K] {
+func upperBound[I Interval[K], K any](interval I, f Cmp[K]) keyBound[K] {
 	k, end := interval.Key(), interval.End()
 	// if the key is equal to the end, or somehow, greater, then we'll say that
 	// the interval is represented only by the point. There should be an
@@ -87,7 +88,7 @@ func upperBound[I Interval[K], K any](interval I, f CompareFn[K]) keyBound[K] {
 	return keyBound[K]{k: end}
 }
 
-func findUpperBound[I Interval[K], K any](n abstract.Node[I, *aug[K, I]], cmp CompareFn[K]) keyBound[K] {
+func findUpperBound[I Interval[K], K any](n abstract.Node[I, *aug[K, I]], cmp Cmp[K]) keyBound[K] {
 	var max keyBound[K]
 	var setMax bool
 	for i, cnt := int16(0), n.Count(); i < cnt; i++ {
@@ -108,7 +109,7 @@ func findUpperBound[I Interval[K], K any](n abstract.Node[I, *aug[K, I]], cmp Co
 	return max
 }
 
-func (b keyBound[K]) compare(cmp CompareFn[K], o keyBound[K]) int {
+func (b keyBound[K]) compare(cmp Cmp[K], o keyBound[K]) int {
 	c := cmp(b.k, o.k)
 	if c != 0 {
 		return c
@@ -122,7 +123,7 @@ func (b keyBound[K]) compare(cmp CompareFn[K], o keyBound[K]) int {
 	return -1
 }
 
-func (b keyBound[K]) contains(cmp CompareFn[K], o K) bool {
+func (b keyBound[K]) contains(cmp Cmp[K], o K) bool {
 	c := cmp(o, b.k)
 	if c == 0 {
 		return b.inclusive

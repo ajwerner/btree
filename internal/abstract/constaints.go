@@ -15,10 +15,6 @@
 
 package abstract
 
-type Item[T any] interface {
-	Less(T) bool
-}
-
 // TODO(ajwerner): Tighten up this interface and make this more generally
 // efficient for updates where possible.
 type Node[K, A any] interface {
@@ -29,11 +25,16 @@ type Node[K, A any] interface {
 }
 
 // Aug is a data structure which augments a node of the tree. It is updated
-// when the structure or contents of the suabstract rooted at the current node
+// when the structure or contents of the substract rooted at the current node
 // changes.
 type Aug[K, Aux, A any] interface {
 	*A
-	Update(Node[K, *A], UpdateMeta[K, Aux, A]) (changed bool)
+	Update(*Config[K, Aux], Node[K, *A], UpdateMeta[K, A]) (changed bool)
+}
+
+type Config[K, Aux any] struct {
+	Config  Aux
+	Compare func(K, K) int
 }
 
 type Action int
@@ -45,8 +46,7 @@ const (
 	Insertion
 )
 
-type UpdateMeta[K, Aux, A any] struct {
-	Aux Aux
+type UpdateMeta[K, A any] struct {
 
 	// Action indicates the semantics of the below fields. If Default,
 	// no fields will be populated.

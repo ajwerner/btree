@@ -20,64 +20,87 @@ import (
 	"github.com/ajwerner/btree/internal/abstract"
 )
 
+// Map is a ordered map from K to V which additionally offers the methods
+// of a order-statistic tree on its iterator.
 type Map[K, V any] struct {
-	t abstract.Map[K, V, struct{}, aug[K], *aug[K]]
+	abstract.Map[K, V, struct{}, aug[K], *aug[K]]
 }
 
+// NewMap constructs a new Map with the provided comparison function.
 func NewMap[K, V any](cmp func(K, K) int) *Map[K, V] {
 	return &Map[K, V]{
-		t: abstract.MakeMap[K, V, struct{}, aug[K]](struct{}{}, cmp),
+		Map: abstract.MakeMap[K, V, struct{}, aug[K]](struct{}{}, cmp),
 	}
 }
 
-type Set[K any] struct {
-	t abstract.Map[K, struct{}, struct{}, aug[K], *aug[K]]
+// Iterator constructs a new Iterator for this Map.
+func (t *Map[K, V]) Iterator() Iterator[K, V] {
+	return Iterator[K, V]{Iterator: t.Map.Iterator()}
 }
 
-func NewSet[K any](cmp func(K, K) int) *Set[K] {
-	return &Set[K]{
-		t: abstract.MakeMap[K, struct{}, struct{}, aug[K]](struct{}{}, cmp),
-	}
+// Set is an ordered set with items of type T which additionally offers the
+// methods of an order-statistic tree on its iterator.
+type Set[T any] Map[T, struct{}]
+
+// NewSet constructs a new Set with the provided comparison function.
+func NewSet[T any](cmp func(T, T) int) *Set[T] {
+	return (*Set[T])(NewMap[T, struct{}](cmp))
 }
 
-func (t *Set[K]) Upsert(k K) (replaced K, overwrote bool) {
-	replaced, _, overwrote = t.t.Upsert(k, struct{}{})
+// Upsert inserts or updates the provided item. It returns
+// the overwritten item if a previous value existed for the key.
+func (t *Set[T]) Upsert(item T) (replaced T, overwrote bool) {
+	replaced, _, overwrote = t.Map.Upsert(item, struct{}{})
 	return replaced, overwrote
 }
 
-func (t *Set[K]) Delete(k K) (removed bool) {
-	_, _, removed = t.t.Delete(k)
+// Delete removes the value with the provided key. It returns true if the
+// item existed in the set.
+func (t *Set[K]) Delete(item K) (removed bool) {
+	_, _, removed = t.Map.Delete(item)
 	return removed
 }
 
-func (t *Map[K, V]) Upsert(k K, v V) (replacedV V, overwrote bool) {
-	_, replacedV, overwrote = t.t.Upsert(k, v)
-	return replacedV, overwrote
+// Iterator constructs an iterator for this set.
+func (t *Set[K]) Iterator() Iterator[K, struct{}] {
+	return (*Map[K, struct{}])(t).Iterator()
 }
 
-func (t *Map[K, V]) Delete(k K) (removedVal V, removed bool) {
-	_, removedVal, removed = t.t.Delete(k)
-	return removedVal, removed
+type aug[K any] struct {
+	// children is the number of items rooted at the current subtree.
+	children int
 }
 
+// Update will update the count for the current node.
+func (a *aug[T]) Update(
+	_ *abstract.Config[T, struct{}],
+	n abstract.Node[T, *aug[T]],
+	_ abstract.UpdateMeta[T, aug[T]],
+) (updated bool) {
+	orig := a.children
+	var children int
+	if !n.IsLeaf() {
+		N := n.Count()
+		for i := int16(0); i <= N; i++ {
+			if child := n.GetChild(i); child != nil {
+				children += child.children
+			}
+		}
+	}
+	children += int(n.Count())
+	a.children = children
+	return a.children != orig
+}
+
+// Iterator allows iteration through the collection. It offers all the usual
+// iterator methods, plus it offers Rank() and SeekNth() which allow efficient
+// rank operations.
 type Iterator[K, V any] struct {
 	abstract.Iterator[K, V, struct{}, aug[K], *aug[K]]
 }
 
-func (t *Map[K, V]) Iterator() Iterator[K, V] {
-	return Iterator[K, V]{Iterator: t.t.MakeIter()}
-}
-
-func (t *Set[K]) Iterator() Iterator[K, struct{}] {
-	return Iterator[K, struct{}]{Iterator: t.t.MakeIter()}
-}
-
-func lowLevel[K, V any](
-	it *Iterator[K, V],
-) *abstract.LowLevelIterator[K, V, struct{}, aug[K], *aug[K]] {
-	return abstract.LowLevel(&it.Iterator)
-}
-
+// Rank returns the rank of the current iterator position. If the iterator
+// is not valid, -1 is returned.
 func (it *Iterator[K, V]) Rank() int {
 	if !it.Valid() {
 		return -1
@@ -108,7 +131,8 @@ func (it *Iterator[K, V]) Rank() int {
 	return before
 }
 
-func (it *Iterator[K, V]) Nth(nth int) {
+// SeekNth seeks the iterator to the nth item in the collection (0-indexed).
+func (it *Iterator[K, V]) SeekNth(nth int) {
 	it.Reset()
 	// Reset has bizarre semantics in that it initializes the iterator to
 	// an invalid position (-1) at the root of the tree. IncrementPos moves it
@@ -146,6 +170,12 @@ func (it *Iterator[K, V]) Nth(nth int) {
 			onErrorf("invariant violated")
 		}
 	}
+}
+
+func lowLevel[K, V any](
+	it *Iterator[K, V],
+) *abstract.LowLevelIterator[K, V, struct{}, aug[K], *aug[K]] {
+	return abstract.LowLevel(&it.Iterator)
 }
 
 var onErrorf = func(format string, args ...interface{}) {
