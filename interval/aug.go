@@ -15,7 +15,7 @@
 
 package interval
 
-import "github.com/ajwerner/btree/new/abstract"
+import "github.com/ajwerner/btree/internal/abstract"
 
 type aug[K any, I Interval[K]] struct {
 	keyBound[K]

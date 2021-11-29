@@ -17,7 +17,7 @@ package orderstat
 import (
 	"fmt"
 
-	"github.com/ajwerner/btree/new/abstract"
+	"github.com/ajwerner/btree/internal/abstract"
 )
 
 type Map[K, V any] struct {
