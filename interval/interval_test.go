@@ -15,22 +15,11 @@
 package interval
 
 import (
-	"constraints"
 	"testing"
 
+	"github.com/ajwerner/btree/new/internal/ordered"
 	"github.com/stretchr/testify/require"
 )
-
-func Compare[T constraints.Ordered](a, b T) int {
-	switch {
-	case a < b:
-		return -1
-	case a == b:
-		return 0
-	default:
-		return 1
-	}
-}
 
 type IntInterval [2]int
 
@@ -45,8 +34,8 @@ func TestIntervalTree(t *testing.T) {
 		}
 	}
 	tree := NewMap[IntInterval, struct{}](
-		Compare[int],
-		IntervalCompare[IntInterval](Compare[int]),
+		ordered.Compare[int],
+		IntervalCompare[IntInterval](ordered.Compare[int]),
 	)
 	items := []IntInterval{{1, 4}, {2, 5}, {3, 3}, {3, 6}, {4, 7}}
 	for _, item := range items {

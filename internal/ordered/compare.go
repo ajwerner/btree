@@ -12,32 +12,19 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package btree
+// Package ordered contains utilities for dealing with types which implement
+// constraints.Ordered.
+package ordered
 
-import (
-	"testing"
+import "constraints"
 
-	"github.com/ajwerner/btree/new/internal/ordered"
-)
-
-func TestBTree(t *testing.T) {
-	assertEq := func(t *testing.T, exp, got int) {
-		t.Helper()
-		if exp != got {
-			t.Fatalf("expected %d, got %d", exp, got)
-		}
-	}
-
-	tree := NewSet(ordered.Compare[int])
-	tree.Upsert(2)
-	tree.Upsert(12)
-	tree.Upsert(1)
-
-	it := tree.Iterator()
-	it.First()
-	expected := []int{1, 2, 12}
-	for _, exp := range expected {
-		assertEq(t, exp, it.Key())
-		it.Next()
+func Compare[T constraints.Ordered](a, b T) int {
+	switch {
+	case a < b:
+		return -1
+	case a == b:
+		return 0
+	default:
+		return 1
 	}
 }
