@@ -16,6 +16,10 @@ type node[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
 	children [MaxEntries + 1]*node[K, V, Aux, A, AP]
 }
 
+func (n *node[K, V, Aux, A, AP]) GetKey(i int16) K {
+	return n.keys[i]
+}
+
 func (n *node[K, V, Aux, A, AP]) GetA() *A {
 	return &n.aug
 }
@@ -34,9 +38,9 @@ func (n *node[K, V, Aux, A, AP]) IterateItems(f func(K, V)) {
 	}
 }
 
-func (n *node[K, V, Aux, A, AP]) GetChild(i int16) Node[*A] {
+func (n *node[K, V, Aux, A, AP]) GetChild(i int16) *A {
 	if !n.leaf && n.children[i] != nil {
-		return n.children[i]
+		return &n.children[i].aug
 	}
 	return nil
 }

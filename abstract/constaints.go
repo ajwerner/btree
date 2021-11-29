@@ -6,11 +6,11 @@ type Item[T any] interface {
 
 // TODO(ajwerner): Tighten up this interface and make this more generally
 // efficient for updates where possible.
-type Node[A any] interface {
-	GetA() A
+type Node[K, A any] interface {
 	Count() int16
 	IsLeaf() bool
-	GetChild(i int16) Node[A]
+	GetKey(i int16) K
+	GetChild(i int16) A
 }
 
 // Aug is a data structure which augments a node of the tree. It is updated
@@ -18,7 +18,7 @@ type Node[A any] interface {
 // changes.
 type Aug[K, Aux, A any] interface {
 	*A
-	Update(Node[*A], UpdateMeta[K, Aux, A]) (changed bool)
+	Update(Node[K, *A], UpdateMeta[K, Aux, A]) (changed bool)
 }
 
 type Action int

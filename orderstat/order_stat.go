@@ -65,9 +65,9 @@ func (it *Iterator[K, V]) Nth(i int) {
 type iteratorForSeek[K any] interface {
 	Reset()
 	IsLeaf() bool
-	IncrementPos() bool
-	SetPos(int16) bool
-	Child() (aug[K], bool)
+	IncrementPos()
+	SetPos(int16)
+	Child() *aug[K]
 	Descend()
 }
 
@@ -91,8 +91,8 @@ func seekNth[K any, It iteratorForSeek[K]](it It, nth int) {
 			it.SetPos(int16(nth - n))
 			return
 		}
-		a, ok := it.Child()
-		if !ok {
+		a := it.Child()
+		if a == nil {
 			onErrorf("failed to visit child")
 		}
 		if n+a.children > nth {

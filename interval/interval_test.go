@@ -3,6 +3,8 @@ package interval
 import (
 	"constraints"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func Compare[T constraints.Ordered](a, b T) int {
@@ -32,7 +34,7 @@ func TestIntervalTree(t *testing.T) {
 		Compare[int],
 		IntervalCompare[IntInterval](Compare[int]),
 	)
-	items := []IntInterval{{1, 2}, {2, 3}, {2, 4}, {3, 3}, {3, 4}}
+	items := []IntInterval{{1, 4}, {2, 5}, {3, 3}, {3, 6}, {4, 7}}
 	for _, item := range items {
 		tree.Upsert(item, struct{}{})
 	}
@@ -41,5 +43,25 @@ func TestIntervalTree(t *testing.T) {
 	for _, exp := range items {
 		assertEq(t, exp, iter.Key())
 		iter.Next()
+	}
+
+	for _, tc := range []struct {
+		q   IntInterval
+		res []IntInterval
+	}{
+		{
+			q:   IntInterval{2, 3},
+			res: []IntInterval{{1, 4}, {2, 5}},
+		},
+		{
+			q:   IntInterval{2, 4},
+			res: []IntInterval{{1, 4}, {2, 5}, {3, 3}, {3, 6}},
+		},
+	} {
+		var res []IntInterval
+		for iter.FirstOverlap(tc.q); iter.Valid(); iter.NextOverlap() {
+			res = append(res, iter.Key())
+		}
+		require.Equal(t, tc.res, res)
 	}
 }
