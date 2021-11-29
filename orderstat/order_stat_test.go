@@ -18,7 +18,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ajwerner/btree/new/internal/ordered"
+	"github.com/ajwerner/btree/internal/ordered"
 	"github.com/stretchr/testify/require"
 )
 

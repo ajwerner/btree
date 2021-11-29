@@ -31,7 +31,7 @@ const (
 // TODO(ajwerner): Probably we want comparison to occur on pointers to the
 // objects rather than the objects themselves, at least in some cases. For very
 // large objects, probably it's better to just store the objects as pointers
-// in the btree itself and to use a sync.Pool to pool allocations. For very
+// in the abstract itself and to use a sync.Pool to pool allocations. For very
 // small objects, directly calling less on the object is probably ideal. The
 // question is mid-sized objects.
 

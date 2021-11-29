@@ -14,7 +14,7 @@
 
 package interval
 
-import "github.com/ajwerner/btree/new/abstract"
+import "github.com/ajwerner/btree/internal/abstract"
 
 // Interval represents an interval with bounds from [Key(), End()) where
 // Key() is inclusive and End() is exclusive. If Key() == End(), then the

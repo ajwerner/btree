@@ -14,7 +14,7 @@
 
 package btree
 
-import "github.com/ajwerner/btree/new/abstract"
+import "github.com/ajwerner/btree/internal/abstract"
 
 type Map[K, V any] struct {
 	t abstract.Map[K, V, struct{}, aug[K], *aug[K]]

@@ -1,4 +1,4 @@
-module github.com/ajwerner/btree/new
+module github.com/ajwerner/btree
 
 go 1.18
 

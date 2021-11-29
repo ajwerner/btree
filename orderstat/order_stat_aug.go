@@ -14,10 +14,10 @@
 
 package orderstat
 
-import "github.com/ajwerner/btree/new/abstract"
+import "github.com/ajwerner/btree/internal/abstract"
 
 type aug[K any] struct {
-	// children is the number of items rooted at the current subtree.
+	// children is the number of items rooted at the current suabstract.
 	children int
 }
 
