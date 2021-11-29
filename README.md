@@ -1,2 +1,5 @@
 # btree
-go2 generics experiment in building generic augmented BTree data structures
+
+go 1.18 generics experiment in building generic augmented btree data structures.
+
+
