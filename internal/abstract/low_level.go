@@ -2,12 +2,14 @@ package abstract
 
 type LowLevelIterator[K, V, Aux, A any, AP Aug[K, Aux, A]] Iterator[K, V, Aux, A, AP]
 
-func LowLevel[K, V, Aux, A any, AP Aug[K, Aux, A]](it *Iterator[K, V, Aux, A, AP]) *LowLevelIterator[K, V, Aux, A, AP] {
+func LowLevel[K, V, Aux, A any, AP Aug[K, Aux, A]](
+	it *Iterator[K, V, Aux, A, AP],
+) *LowLevelIterator[K, V, Aux, A, AP] {
 	return it.lowLevel()
 }
 
-func (i *LowLevelIterator[K, V, Aux, A, AP]) Aux() Aux {
-	return i.r.td.aux
+func (i *LowLevelIterator[K, V, Aux, A, AP]) Config() Config[K, Aux] {
+	return i.r.cfg
 }
 
 func (i *LowLevelIterator[K, V, Aux, A, AP]) IncrementPos() {
@@ -34,13 +36,6 @@ func (i *LowLevelIterator[K, V, Aux, A, AP]) Depth() int {
 	return i.s.len()
 }
 
-func (i *LowLevelIterator[K, V, Aux, A, AP]) makeFrame(n *node[K, V, Aux, A, AP], pos int16) iterFrame[K, V, Aux, A, AP] {
-	return iterFrame[K, V, Aux, A, AP]{
-		node: n,
-		pos:  pos,
-	}
-}
-
 func (i *LowLevelIterator[K, V, Aux, A, AP]) Child() AP {
 	return &i.children[i.pos].aug
 }
@@ -54,4 +49,13 @@ func (i *LowLevelIterator[K, V, Aux, A, AP]) Descend() {
 // to the one previously set for this parent node.
 func (i *LowLevelIterator[K, V, Aux, A, AP]) Ascend() {
 	i.iterFrame = i.s.pop()
+}
+
+func (i *LowLevelIterator[K, V, Aux, A, AP]) makeFrame(
+	n *node[K, V, Aux, A, AP], pos int16,
+) iterFrame[K, V, Aux, A, AP] {
+	return iterFrame[K, V, Aux, A, AP]{
+		node: n,
+		pos:  pos,
+	}
 }

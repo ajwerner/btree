@@ -16,60 +16,46 @@ package btree
 
 import "github.com/ajwerner/btree/internal/abstract"
 
+// Map is a ordered map from K to V.
 type Map[K, V any] struct {
-	t abstract.Map[K, V, struct{}, aug[K], *aug[K]]
+	abstract.Map[K, V, struct{}, aug[K], *aug[K]]
 }
 
+// NewMap constructs a new Map with the provided comparison function.
 func NewMap[K, V any](cmp func(K, K) int) *Map[K, V] {
 	return &Map[K, V]{
-		t: abstract.MakeMap[K, V, struct{}, aug[K]](struct{}{}, cmp),
+		Map: abstract.MakeMap[K, V, struct{}, aug[K]](struct{}{}, cmp),
 	}
 }
 
-func (t *Map[K, V]) Upsert(k K, v V) (replacedV V, replaced bool) {
-	_, replacedV, replaced = t.t.Upsert(k, v)
-	return replacedV, replaced
+// Set is an ordered set of items of type T.
+type Set[T any] Map[T, struct{}]
+
+// NewSet constructs a new Set with the provided comparison function.
+func NewSet[T any](cmp func(T, T) int) *Set[T] {
+	return (*Set[T])(NewMap[T, struct{}](cmp))
 }
 
-func (t *Map[K, V]) Delete(k K) (removedV V, removed bool) {
-	_, removedV, removed = t.t.Delete(k)
-	return removedV, removed
+// Upsert inserts or updates the provided item. It returns
+// the overwritten item if a previous value existed for the key.
+func (t *Set[T]) Upsert(item T) (replaced T, overwrote bool) {
+	replaced, _, overwrote = t.Map.Upsert(item, struct{}{})
+	return replaced, overwrote
 }
 
-func (t *Map[K, V]) Iterator() Iterator[K, V] {
-	return Iterator[K, V]{Iterator: t.t.MakeIter()}
-}
-
-type Set[K any] struct {
-	t abstract.Map[K, struct{}, struct{}, aug[K], *aug[K]]
-}
-
-func NewSet[K any](cmp func(K, K) int) *Set[K] {
-	return &Set[K]{
-		t: abstract.MakeMap[K, struct{}, struct{}, aug[K]](struct{}{}, cmp),
-	}
-}
-
-func (t *Set[K]) Upsert(k K) (replacedK K, replaced bool) {
-	replacedK, _, replaced = t.t.Upsert(k, struct{}{})
-	return replacedK, replaced
-}
-
-func (t *Set[K]) Delete(k K) (removedK K, removed bool) {
-	removedK, _, removed = t.t.Delete(k)
-	return removedK, removed
-}
-
-func (t *Set[K]) Iterator() Iterator[K, struct{}] {
-	return Iterator[K, struct{}]{Iterator: t.t.MakeIter()}
-}
-
-type Iterator[K, V any] struct {
-	abstract.Iterator[K, V, struct{}, aug[K], *aug[K]]
+// Delete removes the value with the provided key. It returns true if the
+// item existed in the set.
+func (t *Set[K]) Delete(item K) (removed bool) {
+	_, _, removed = t.Map.Delete(item)
+	return removed
 }
 
 type aug[K any] struct{}
 
-func (a *aug[T]) Update(n abstract.Node[T, *aug[T]], md abstract.UpdateMeta[T, struct{}, aug[T]]) bool {
+func (a *aug[T]) Update(
+	*abstract.Config[T, struct{}],
+	abstract.Node[T, *aug[T]],
+	abstract.UpdateMeta[T, aug[T]],
+) bool {
 	return false
 }

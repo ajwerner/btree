@@ -42,19 +42,14 @@ const (
 type Map[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
 	root   *node[K, V, Aux, A, AP]
 	length int
-	td     treeData[K, Aux]
-}
-
-type treeData[K, Aux any] struct {
-	aux Aux
-	cmp func(K, K) int
+	cfg    Config[K, Aux]
 }
 
 func MakeMap[K, V, Aux, A any, AP Aug[K, Aux, A]](aux Aux, cmp func(K, K) int) Map[K, V, Aux, A, AP] {
 	return Map[K, V, Aux, A, AP]{
-		td: treeData[K, Aux]{
-			cmp: cmp,
-			aux: aux,
+		cfg: Config[K, Aux]{
+			Compare: cmp,
+			Config:  aux,
 		},
 	}
 }
@@ -99,7 +94,7 @@ func (t *Map[K, V, Aux, A, AP]) Delete(k K) (removedK K, v V, found bool) {
 	if t.root == nil || t.root.count == 0 {
 		return removedK, v, false
 	}
-	if removedK, v, found, _ = mut(&t.root).remove(&t.td, k); found {
+	if removedK, v, found, _ = mut(&t.root).remove(&t.cfg, k); found {
 		t.length--
 	}
 	if t.root.count == 0 {
@@ -120,19 +115,19 @@ func (t *Map[K, V, Aux, A, AP]) Upsert(item K, value V) (replacedK K, replacedV 
 	if t.root == nil {
 		t.root = newLeafNode[K, V, Aux, A, AP]()
 	} else if t.root.count >= MaxEntries {
-		splitLaK, splitLaV, splitNode := mut(&t.root).split(&t.td, MaxEntries/2)
+		splitLaK, splitLaV, splitNode := mut(&t.root).split(&t.cfg, MaxEntries/2)
 		newRoot := newNode[K, V, Aux, A, AP]()
 		newRoot.count = 1
 		newRoot.keys[0] = splitLaK
 		newRoot.values[0] = splitLaV
 		newRoot.children[0] = t.root
-		t.root.update(t.td.aux)
-		splitNode.update(t.td.aux)
+		t.root.update(&t.cfg)
+		splitNode.update(&t.cfg)
 		newRoot.children[1] = splitNode
-		newRoot.update(t.td.aux)
+		newRoot.update(&t.cfg)
 		t.root = newRoot
 	}
-	replacedK, replacedV, replaced, _ = mut(&t.root).insert(&t.td, item, value)
+	replacedK, replacedV, replaced, _ = mut(&t.root).insert(&t.cfg, item, value)
 	if !replaced {
 		t.length++
 	}
@@ -142,7 +137,7 @@ func (t *Map[K, V, Aux, A, AP]) Upsert(item K, value V) (replacedK K, replacedV 
 // MakeIter returns a new Iterator object. It is not safe to continue using an
 // Iterator after modifications are made to the tree. If modifications are made,
 // create a new Iterator.
-func (t *Map[K, V, Aux, A, AP]) MakeIter() Iterator[K, V, Aux, A, AP] {
+func (t *Map[K, V, Aux, A, AP]) Iterator() Iterator[K, V, Aux, A, AP] {
 	it := Iterator[K, V, Aux, A, AP]{r: t}
 	it.Reset()
 	return it

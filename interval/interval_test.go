@@ -21,6 +21,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type IntervalWithID[K, ID any] interface {
+	Interval[K]
+	ID() ID
+}
+
+func IntervalIDCompare[K, ID any, I IntervalWithID[K, ID]](cmpK Cmp[K], cmpID Cmp[ID]) Cmp[I] {
+	return func(a, b I) int {
+		if c := cmpK(a.Key(), b.Key()); c != 0 {
+			return c
+		}
+		if c := cmpK(a.End(), b.End()); c != 0 {
+			return c
+		}
+		return cmpID(a.ID(), b.ID())
+	}
+}
+
+func IntervalCompare[I Interval[K], K any](f func(K, K) int) func(I, I) int {
+	return func(a, b I) int {
+		if c := f(a.Key(), b.Key()); c != 0 {
+			return c
+		}
+		return f(a.End(), b.End())
+	}
+}
+
 type IntInterval [2]int
 
 func (i IntInterval) Key() int { return i[0] }
@@ -41,7 +67,7 @@ func TestIntervalTree(t *testing.T) {
 	for _, item := range items {
 		tree.Upsert(item, struct{}{})
 	}
-	iter := tree.MakeIter()
+	iter := tree.Iterator()
 	iter.First()
 	for _, exp := range items {
 		assertEq(t, exp, iter.Key())

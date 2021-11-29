@@ -22,15 +22,9 @@ import (
 )
 
 type Iterator[K, V any, I Interval[K]] struct {
-	abstract.Iterator[I, V, CompareFn[K], aug[K, I], *aug[K, I]]
+	abstract.Iterator[I, V, config[K], aug[K, I], *aug[K, I]]
 
 	o overlapScan[I, K]
-}
-
-func (t *Map[K, V, I]) MakeIter() Iterator[K, V, I] {
-	return Iterator[K, V, I]{
-		Iterator: t.t.MakeIter(),
-	}
 }
 
 // An overlap scan is a scan over all latches that overlap with the provided
@@ -116,8 +110,8 @@ func (i *Iterator[K, V, I]) FirstOverlap(bounds I) {
 
 func lowLevel[K, V any, I Interval[K]](
 	it *Iterator[K, V, I],
-) *abstract.LowLevelIterator[I, V, CompareFn[K], aug[K, I], *aug[K, I]] {
-	return abstract.LowLevel[I, V, CompareFn[K], aug[K, I], *aug[K, I]](&it.Iterator)
+) *abstract.LowLevelIterator[I, V, config[K], aug[K, I], *aug[K, I]] {
+	return abstract.LowLevel[I, V, config[K], aug[K, I], *aug[K, I]](&it.Iterator)
 }
 
 func (i *Iterator[K, V, I]) Reset() {
@@ -144,7 +138,7 @@ func (i *Iterator[K, V, I]) constrainMinSearchBounds() {
 	k := i.o.bounds.Key()
 	ll := lowLevel(i)
 	n := ll.Node()
-	cmp := ll.Aux()
+	cmp := ll.Config().Config.compareK
 	j := sort.Search(int(n.Count()), func(j int) bool {
 		return cmp(k, n.GetKey(int16(j)).Key()) <= 0
 	})
@@ -154,7 +148,7 @@ func (i *Iterator[K, V, I]) constrainMinSearchBounds() {
 
 func (i *Iterator[K, V, I]) constrainMaxSearchBounds() {
 	ll := lowLevel(i)
-	cmp := ll.Aux()
+	cmp := ll.Config().Config.compareK
 	up := upperBound(i.o.bounds, cmp)
 	n := ll.Node()
 	j := sort.Search(int(n.Count()), func(j int) bool {
@@ -166,7 +160,7 @@ func (i *Iterator[K, V, I]) constrainMaxSearchBounds() {
 
 func (i *Iterator[K, V, I]) findNextOverlap() {
 	ll := lowLevel(i)
-	cmp := ll.Aux()
+	cmp := ll.Config().Config.compareK
 	for {
 		if ll.Pos() > ll.Node().Count() {
 			// Iterate up tree.

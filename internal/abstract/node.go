@@ -311,7 +311,7 @@ func (n *node[K, V, Aux, A, AP]) find(cmp func(K, K) int, item K) (index int, fo
 // |         x |     | z         |
 // +-----------+     +-----------+
 //
-func (n *node[K, V, Aux, A, AP]) split(td *treeData[K, Aux], i int) (K, V, *node[K, V, Aux, A, AP]) {
+func (n *node[K, V, Aux, A, AP]) split(cfg *Config[K, Aux], i int) (K, V, *node[K, V, Aux, A, AP]) {
 	outK := n.keys[i]
 	outV := n.values[i]
 	var next *node[K, V, Aux, A, AP]
@@ -336,26 +336,25 @@ func (n *node[K, V, Aux, A, AP]) split(td *treeData[K, Aux], i int) (K, V, *node
 		}
 	}
 	n.count = int16(i)
-	next.update(td.aux)
-	n.updateOn(td.aux, Split, outK, next)
+	next.update(cfg)
+	n.updateOn(cfg, Split, outK, next)
 	return outK, outV, next
 }
 
-func (n *node[K, V, Aux, A, AP]) update(aux Aux) bool {
-	return n.updateWithMeta(aux, UpdateMeta[K, Aux, A]{})
+func (n *node[K, V, Aux, A, AP]) update(cfg *Config[K, Aux]) bool {
+	return n.updateWithMeta(cfg, UpdateMeta[K, A]{})
 }
 
-func (n *node[K, V, Aux, A, AP]) updateWithMeta(aux Aux, md UpdateMeta[K, Aux, A]) bool {
-	md.Aux = aux
-	return AP(&n.aug).Update(n, md)
+func (n *node[K, V, Aux, A, AP]) updateWithMeta(cfg *Config[K, Aux], md UpdateMeta[K, A]) bool {
+	return AP(&n.aug).Update(cfg, n, md)
 }
 
-func (n *node[K, V, Aux, A, AP]) updateOn(aux Aux, action Action, k K, affected *node[K, V, Aux, A, AP]) bool {
+func (n *node[K, V, Aux, A, AP]) updateOn(cfg *Config[K, Aux], action Action, k K, affected *node[K, V, Aux, A, AP]) bool {
 	var a *A
 	if affected != nil {
 		a = &affected.aug
 	}
-	return n.updateWithMeta(aux, UpdateMeta[K, Aux, A]{
+	return n.updateWithMeta(cfg, UpdateMeta[K, A]{
 		Action:        action,
 		RelevantKey:   k,
 		ModifiedOther: a,
@@ -366,8 +365,8 @@ func (n *node[K, V, Aux, A, AP]) updateOn(aux Aux, action Action, k K, affected 
 // nodes in the suAugBTree exceed MaxEntries keys. Returns true if an existing item
 // was replaced and false if an item was inserted. Also returns whether the
 // node's upper bound changes.
-func (n *node[K, V, Aux, A, AP]) insert(td *treeData[K, Aux], item K, value V) (replacedK K, replacedV V, replaced, newBound bool) {
-	i, found := n.find(td.cmp, item)
+func (n *node[K, V, Aux, A, AP]) insert(cfg *Config[K, Aux], item K, value V) (replacedK K, replacedV V, replaced, newBound bool) {
+	i, found := n.find(cfg.Compare, item)
 	if found {
 		replacedV = n.values[i]
 		replacedK = n.keys[i]
@@ -377,12 +376,12 @@ func (n *node[K, V, Aux, A, AP]) insert(td *treeData[K, Aux], item K, value V) (
 	}
 	if n.leaf {
 		n.insertAt(i, item, value, nil)
-		return replacedK, replacedV, false, n.updateOn(td.aux, Insertion, item, nil)
+		return replacedK, replacedV, false, n.updateOn(cfg, Insertion, item, nil)
 	}
 	if n.children[i].count >= MaxEntries {
-		splitLK, splitLV, splitNode := mut(&n.children[i]).split(td, MaxEntries/2)
+		splitLK, splitLV, splitNode := mut(&n.children[i]).split(cfg, MaxEntries/2)
 		n.insertAt(i, splitLK, splitLV, splitNode)
-		if c := td.cmp(item, n.keys[i]); c < 0 {
+		if c := cfg.Compare(item, n.keys[i]); c < 0 {
 			// no change, we want first split node
 		} else if c > 0 {
 			i++ // we want second split node
@@ -396,16 +395,17 @@ func (n *node[K, V, Aux, A, AP]) insert(td *treeData[K, Aux], item K, value V) (
 			return replacedK, replacedV, true, false
 		}
 	}
-	replacedK, replacedV, replaced, newBound = mut(&n.children[i]).insert(td, item, value)
+	replacedK, replacedV, replaced, newBound =
+		mut(&n.children[i]).insert(cfg, item, value)
 	if newBound {
-		newBound = n.updateOn(td.aux, Insertion, item, nil)
+		newBound = n.updateOn(cfg, Insertion, item, nil)
 	}
 	return replacedK, replacedV, replaced, newBound
 }
 
 // removeMax removes and returns the maximum item from the suAugBTree rooted at
 // this node.
-func (n *node[K, V, Aux, A, AP]) removeMax(aux Aux) (K, V) {
+func (n *node[K, V, Aux, A, AP]) removeMax(cfg *Config[K, Aux]) (K, V) {
 	if n.leaf {
 		n.count--
 		outK := n.keys[n.count]
@@ -414,25 +414,25 @@ func (n *node[K, V, Aux, A, AP]) removeMax(aux Aux) (K, V) {
 		var rV V
 		n.keys[n.count] = rK
 		n.values[n.count] = rV
-		n.updateOn(aux, Removal, outK, nil)
+		n.updateOn(cfg, Removal, outK, nil)
 		return outK, outV
 	}
 	// Recurse into max child.
 	i := int(n.count)
 	if n.children[i].count <= MinEntries {
 		// Child not large enough to remove from.
-		n.rebalanceOrMerge(aux, i)
-		return n.removeMax(aux) // redo
+		n.rebalanceOrMerge(cfg, i)
+		return n.removeMax(cfg) // redo
 	}
 	child := mut(&n.children[i])
-	outK, outV := child.removeMax(aux)
-	n.updateOn(aux, Removal, outK, nil)
+	outK, outV := child.removeMax(cfg)
+	n.updateOn(cfg, Removal, outK, nil)
 	return outK, outV
 }
 
 // rebalanceOrMerge grows child 'i' to ensure it has sufficient room to remove
 // an item from it while keeping it at or above MinItems.
-func (n *node[K, V, Aux, A, AP]) rebalanceOrMerge(aux Aux, i int) {
+func (n *node[K, V, Aux, A, AP]) rebalanceOrMerge(cfg *Config[K, Aux], i int) {
 	switch {
 	case i > 0 && n.children[i-1].count > MinEntries:
 		// Rebalance from left sibling.
@@ -469,8 +469,8 @@ func (n *node[K, V, Aux, A, AP]) rebalanceOrMerge(aux Aux, i int) {
 		yLaK, yLaV := n.keys[i-1], n.values[i-1]
 		child.pushFront(yLaK, yLaV, grandChild)
 		n.keys[i-1], n.values[i-1] = xLaK, xLaV
-		left.updateOn(aux, Removal, xLaK, grandChild)
-		child.updateOn(aux, Insertion, yLaK, grandChild)
+		left.updateOn(cfg, Removal, xLaK, grandChild)
+		child.updateOn(cfg, Insertion, yLaK, grandChild)
 
 	case i < int(n.count) && n.children[i+1].count > MinEntries:
 		// Rebalance from right sibling.
@@ -507,8 +507,8 @@ func (n *node[K, V, Aux, A, AP]) rebalanceOrMerge(aux Aux, i int) {
 		yLaK, yLaV := n.keys[i], n.values[i]
 		child.pushBack(yLaK, yLaV, grandChild)
 		n.keys[i], n.values[i] = xLaK, xLaV
-		right.updateOn(aux, Removal, xLaK, grandChild)
-		child.updateOn(aux, Insertion, yLaK, grandChild)
+		right.updateOn(cfg, Removal, xLaK, grandChild)
+		child.updateOn(cfg, Insertion, yLaK, grandChild)
 
 	default:
 		// Merge with either the left or right sibling.
@@ -549,7 +549,7 @@ func (n *node[K, V, Aux, A, AP]) rebalanceOrMerge(aux Aux, i int) {
 		}
 		child.count += mergeChild.count + 1
 
-		child.updateOn(aux, Insertion, mergeLaK, mergeChild)
+		child.updateOn(cfg, Insertion, mergeLaK, mergeChild)
 		mergeChild.decRef(false /* recursive */)
 	}
 }
@@ -557,12 +557,12 @@ func (n *node[K, V, Aux, A, AP]) rebalanceOrMerge(aux Aux, i int) {
 // remove removes an item from the suAugBTree rooted at this node. Returns the item
 // that was removed or nil if no matching item was found. Also returns whether
 // the node's upper bound changes.
-func (n *node[K, V, Aux, A, AP]) remove(td *treeData[K, Aux], item K) (outK K, outV V, found, newBound bool) {
-	i, found := n.find(td.cmp, item)
+func (n *node[K, V, Aux, A, AP]) remove(cfg *Config[K, Aux], item K) (outK K, outV V, found, newBound bool) {
+	i, found := n.find(cfg.Compare, item)
 	if n.leaf {
 		if found {
 			outK, outV, _ = n.removeAt(i)
-			return outK, outV, true, n.updateOn(td.aux, Removal, outK, nil)
+			return outK, outV, true, n.updateOn(cfg, Removal, outK, nil)
 		}
 		var rK K
 		var rV V
@@ -570,21 +570,21 @@ func (n *node[K, V, Aux, A, AP]) remove(td *treeData[K, Aux], item K) (outK K, o
 	}
 	if n.children[i].count <= MinEntries {
 		// Child not large enough to remove from.
-		n.rebalanceOrMerge(td.aux, i)
-		return n.remove(td, item) // redo
+		n.rebalanceOrMerge(cfg, i)
+		return n.remove(cfg, item) // redo
 	}
 	child := mut(&n.children[i])
 	if found {
 		// Replace the item being removed with the max item in our left child.
 		outK = n.keys[i]
 		outV = n.values[i]
-		n.keys[i], n.values[i] = child.removeMax(td.aux)
-		return outK, outV, true, n.updateOn(td.aux, Removal, outK, nil)
+		n.keys[i], n.values[i] = child.removeMax(cfg)
+		return outK, outV, true, n.updateOn(cfg, Removal, outK, nil)
 	}
 	// Latch is not in this node and child is large enough to remove from.
-	outK, outV, found, newBound = child.remove(td, item)
+	outK, outV, found, newBound = child.remove(cfg, item)
 	if newBound {
-		newBound = n.updateOn(td.aux, Removal, outK, nil)
+		newBound = n.updateOn(cfg, Removal, outK, nil)
 	}
 	return outK, outV, found, newBound
 }

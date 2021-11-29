@@ -35,7 +35,7 @@ func TestOrderStatTree(t *testing.T) {
 		require.Equal(t, i, iter.Rank())
 		iter.Next()
 	}
-	iter.Nth(2)
+	iter.SeekNth(2)
 	require.Equal(t, 4, iter.Key())
 }
 
@@ -70,7 +70,7 @@ func TestOrderStatNth(t *testing.T) {
 
 	iter := tree.Iterator()
 	for _, idx := range perm {
-		iter.Nth(idx)
+		iter.SeekNth(idx)
 		require.Equal(t, items[idx], iter.Key())
 		for i := idx + 1; i < N; i++ {
 			iter.Next()
@@ -80,4 +80,8 @@ func TestOrderStatNth(t *testing.T) {
 		iter.Next()
 		require.False(t, iter.Valid())
 	}
+
+	clone := tree.Clone()
+	clone.Reset()
+	require.Equal(t, tree.Len(), len(perm))
 }
