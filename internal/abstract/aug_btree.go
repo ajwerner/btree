@@ -23,7 +23,7 @@ import (
 // compile-time constant.
 
 const (
-	Degree     = 2
+	Degree     = 32
 	MaxEntries = 2*Degree - 1
 	MinEntries = Degree - 1
 )
@@ -45,11 +45,12 @@ type Map[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
 	cfg    Config[K, Aux]
 }
 
+// MakeMap constructs a new Map.
 func MakeMap[K, V, Aux, A any, AP Aug[K, Aux, A]](aux Aux, cmp func(K, K) int) Map[K, V, Aux, A, AP] {
 	return Map[K, V, Aux, A, AP]{
 		cfg: Config[K, Aux]{
-			Compare: cmp,
-			Config:  aux,
+			cmp:    cmp,
+			Config: aux,
 		},
 	}
 }
