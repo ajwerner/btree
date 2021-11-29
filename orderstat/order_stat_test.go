@@ -15,26 +15,15 @@
 package orderstat
 
 import (
-	"constraints"
 	"math/rand"
 	"testing"
 
+	"github.com/ajwerner/btree/new/internal/ordered"
 	"github.com/stretchr/testify/require"
 )
 
-func Compare[T constraints.Ordered](a, b T) int {
-	switch {
-	case a < b:
-		return -1
-	case a == b:
-		return 0
-	default:
-		return 1
-	}
-}
-
 func TestOrderStatTree(t *testing.T) {
-	tree := NewMap[int, int](Compare[int])
+	tree := NewMap[int, int](ordered.Compare[int])
 	tree.Upsert(2, 1)
 	tree.Upsert(3, 2)
 	tree.Upsert(5, 4)
@@ -51,7 +40,7 @@ func TestOrderStatTree(t *testing.T) {
 
 func TestOrderStatNth(t *testing.T) {
 	t.Parallel()
-	tree := NewSet(Compare[int])
+	tree := NewSet(ordered.Compare[int])
 	const maxN = 1000
 	N := rand.Intn(maxN)
 	items := make([]int, 0, N)
