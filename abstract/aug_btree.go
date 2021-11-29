@@ -84,7 +84,7 @@ func (t *Map[K, V, Aux, A, AP]) Delete(k K) (removedK K, v V, found bool) {
 	if t.root == nil || t.root.count == 0 {
 		return removedK, v, false
 	}
-	if removedK, v, found, _ = mut(&t.root).remove(t.td, k); found {
+	if removedK, v, found, _ = mut(&t.root).remove(&t.td, k); found {
 		t.length--
 	}
 	if t.root.count == 0 {
@@ -117,7 +117,7 @@ func (t *Map[K, V, Aux, A, AP]) Upsert(item K, value V) (replacedK K, replacedV 
 		newRoot.update(t.td.aux)
 		t.root = newRoot
 	}
-	replacedK, replacedV, replaced, _ = mut(&t.root).insert(t.aux, t.cmp, item, value)
+	replacedK, replacedV, replaced, _ = mut(&t.root).insert(&t.td, item, value)
 	if !replaced {
 		t.length++
 	}

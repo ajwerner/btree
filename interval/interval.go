@@ -2,8 +2,11 @@ package interval
 
 import "github.com/ajwerner/btree/new/abstract"
 
-// Note this is totally incomplete
-
+// Interval represents an interval with bounds from [Key(), End()) where
+// Key() is inclusive and End() is exclusive. If Key() == End(), then the
+// Inteval represents a point that only includes that value. Intervals with
+// Key() which is larger than End() are invalid and may result in panics
+// upon insertion.
 type Interval[K any] interface {
 	Key() K
 	End() K
@@ -14,25 +17,12 @@ type IntervalWithID[K, ID any] interface {
 	ID() ID
 }
 
-type kBound[K any] struct {
-	k         K
-	inclusive bool
-}
-
-type aug[K any, I Interval[K]] struct {
-	kBound[K]
-}
-
-func (a *aug[K, I]) Update(n abstract.Node[*aug[K, I]], md abstract.UpdateMeta[I, CompareFn[K], aug[K, I]]) (updated bool) {
-	return false
-}
-
-type IntervalTree[K, V any, I Interval[K]] struct {
+type Map[K, V any, I Interval[K]] struct {
 	t abstract.Map[I, V, CompareFn[K], aug[K, I], *aug[K, I]]
 }
 
-func NewMap[I Interval[K], V, K any](cmpK CompareFn[K], cmpI CompareFn[I]) IntervalTree[K, V, I] {
-	return IntervalTree[K, V, I]{
+func NewMap[I Interval[K], V, K any](cmpK CompareFn[K], cmpI CompareFn[I]) Map[K, V, I] {
+	return Map[K, V, I]{
 		t: abstract.MakeMap[I, V, CompareFn[K], aug[K, I]](cmpK, cmpI),
 	}
 }
@@ -60,41 +50,6 @@ func IntervalCompare[I Interval[K], K any](f func(K, K) int) func(I, I) int {
 	}
 }
 
-func (t *IntervalTree[K, V, I]) Upsert(k I, v V) {
+func (t *Map[K, V, I]) Upsert(k I, v V) {
 	t.t.Upsert(k, v)
-}
-
-type Iterator[K, V any, I Interval[K]] struct {
-	it abstract.Iterator[I, V, CompareFn[K], aug[K, I], *aug[K, I]]
-
-	// The "soft" lower-bound constraint.
-	constrMinN       abstract.Node[aug[K, I]]
-	constrMinPos     int16
-	constrMinReached bool
-
-	// The "hard" upper-bound constraint.
-	constrMaxN   abstract.Node[aug[K, I]]
-	constrMaxPos int16
-}
-
-func (t *IntervalTree[K, V, I]) MakeIter() Iterator[K, V, I] {
-	return Iterator[K, V, I]{
-		it: t.t.MakeIter(),
-	}
-}
-
-func (it *Iterator[K, V, I]) First() {
-	it.it.First()
-}
-
-func (it *Iterator[K, V, I]) Next() {
-	it.it.Next()
-}
-
-func (it *Iterator[K, V, I]) Valid() bool {
-	return it.it.Valid()
-}
-
-func (it *Iterator[K, V, I]) Key() I {
-	return it.it.Key()
 }

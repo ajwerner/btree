@@ -8,6 +8,10 @@ type Iterator[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
 	// TODO(ajwerner): Add back augmented search
 }
 
+func (i *Iterator[K, V, Aux, A, AP]) Aux() Aux {
+	return i.r.td.aux
+}
+
 func (i *Iterator[K, V, Aux, A, AP]) Reset() {
 	i.node = i.r.root
 	i.pos = -1
@@ -80,17 +84,11 @@ func (i *Iterator[K, V, Aux, A, AP]) Last() {
 	i.pos = i.count - 1
 }
 
-func (i *Iterator[K, V, Aux, A, AP]) IncrementPos() bool {
-	return i.SetPos(i.pos + 1)
+func (i *Iterator[K, V, Aux, A, AP]) IncrementPos() {
+	i.SetPos(i.pos + 1)
 }
 
-func (i *Iterator[K, V, Aux, A, AP]) SetPos(pos int16) bool {
-	if pos <= i.count && pos >= 0 {
-		i.pos = pos
-		return true
-	}
-	return false
-}
+func (i *Iterator[K, V, Aux, A, AP]) SetPos(pos int16) { i.pos = pos }
 
 // Next positions the Iterator to the key immediately following
 // its current position.
@@ -164,7 +162,7 @@ func (i *Iterator[K, V, Aux, A, AP]) IsLeaf() bool {
 	return i.leaf
 }
 
-func (i *Iterator[K, V, Aux, A, AP]) Node() Node[*A] {
+func (i *Iterator[K, V, Aux, A, AP]) Node() Node[K, *A] {
 	return i.node
 }
 
@@ -179,11 +177,8 @@ func (i *Iterator[K, V, Aux, A, AP]) makeFrame(n *node[K, V, Aux, A, AP], pos in
 	}
 }
 
-func (i *Iterator[K, V, Aux, A, AP]) Child() (a A, ok bool) {
-	if i.Pos() < 0 || i.IsLeaf() {
-		return a, false
-	}
-	return i.children[i.pos].aug, true
+func (i *Iterator[K, V, Aux, A, AP]) Child() AP {
+	return &i.children[i.pos].aug
 }
 
 func (i *Iterator[K, V, Aux, A, AP]) Descend() {

@@ -66,6 +66,6 @@ func (it *Iterator[K, V]) Value() V    { return it.it.Value() }
 
 type aug[K any] struct{}
 
-func (a *aug[T]) Update(n abstract.Node[*aug[T]], md abstract.UpdateMeta[T, struct{}, aug[T]]) bool {
+func (a *aug[T]) Update(n abstract.Node[T, *aug[T]], md abstract.UpdateMeta[T, struct{}, aug[T]]) bool {
 	return false
 }
