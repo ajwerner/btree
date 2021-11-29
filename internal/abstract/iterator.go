@@ -20,7 +20,6 @@ type Iterator[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
 	r *Map[K, V, Aux, A, AP]
 	iterFrame[K, V, Aux, A, AP]
 	s iterStack[K, V, Aux, A, AP]
-	// TODO(ajwerner): Add back augmented search
 }
 
 func (i *Iterator[K, V, Aux, A, AP]) lowLevel() *LowLevelIterator[K, V, Aux, A, AP] {
@@ -42,7 +41,7 @@ func (i *Iterator[K, V, Aux, A, AP]) SeekGE(key K) {
 	}
 	ll := i.lowLevel()
 	for {
-		pos, found := i.find(i.r.cfg.Compare, key)
+		pos, found := i.find(i.r.cfg.cmp, key)
 		i.pos = int16(pos)
 		if found {
 			return
@@ -65,7 +64,7 @@ func (i *Iterator[K, V, Aux, A, AP]) SeekLT(key K) {
 	}
 	ll := i.lowLevel()
 	for {
-		pos, found := i.find(i.r.cfg.Compare, key)
+		pos, found := i.find(i.r.cfg.cmp, key)
 		i.pos = int16(pos)
 		if found || i.leaf {
 			i.Prev()
@@ -161,12 +160,14 @@ func (i *Iterator[K, V, Aux, A, AP]) Valid() bool {
 	return i.pos >= 0 && i.pos < i.count
 }
 
-// Cur returns the key at the Iterator's current position. It is illegal
-// to call Cur if the Iterator is not valid.
+// Key returns the key at the Iterator's current position. It is illegal
+// to call Key if the Iterator is not valid.
 func (i *Iterator[K, V, Aux, A, AP]) Key() K {
 	return i.keys[i.pos]
 }
 
+// Value returns the value at the Iterator's current position. It is illegal
+// to call Value if the Iterator is not valid.
 func (i *Iterator[K, V, Aux, A, AP]) Value() V {
 	return i.values[i.pos]
 }

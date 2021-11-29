@@ -139,7 +139,7 @@ func (i *Iterator[K, V, I]) constrainMinSearchBounds() {
 	ll := lowLevel(i)
 	n := ll.Node()
 	cmp := ll.Config().Config.compareK
-	j := sort.Search(int(n.Count()), func(j int) bool {
+	j := sort.Search(int(ll.Count()), func(j int) bool {
 		return cmp(k, n.GetKey(int16(j)).Key()) <= 0
 	})
 	i.o.constrMinN = n

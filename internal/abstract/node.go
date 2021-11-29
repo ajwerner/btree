@@ -366,7 +366,7 @@ func (n *node[K, V, Aux, A, AP]) updateOn(cfg *Config[K, Aux], action Action, k 
 // was replaced and false if an item was inserted. Also returns whether the
 // node's upper bound changes.
 func (n *node[K, V, Aux, A, AP]) insert(cfg *Config[K, Aux], item K, value V) (replacedK K, replacedV V, replaced, newBound bool) {
-	i, found := n.find(cfg.Compare, item)
+	i, found := n.find(cfg.cmp, item)
 	if found {
 		replacedV = n.values[i]
 		replacedK = n.keys[i]
@@ -381,7 +381,7 @@ func (n *node[K, V, Aux, A, AP]) insert(cfg *Config[K, Aux], item K, value V) (r
 	if n.children[i].count >= MaxEntries {
 		splitLK, splitLV, splitNode := mut(&n.children[i]).split(cfg, MaxEntries/2)
 		n.insertAt(i, splitLK, splitLV, splitNode)
-		if c := cfg.Compare(item, n.keys[i]); c < 0 {
+		if c := cfg.cmp(item, n.keys[i]); c < 0 {
 			// no change, we want first split node
 		} else if c > 0 {
 			i++ // we want second split node
@@ -558,7 +558,7 @@ func (n *node[K, V, Aux, A, AP]) rebalanceOrMerge(cfg *Config[K, Aux], i int) {
 // that was removed or nil if no matching item was found. Also returns whether
 // the node's upper bound changes.
 func (n *node[K, V, Aux, A, AP]) remove(cfg *Config[K, Aux], item K) (outK K, outV V, found, newBound bool) {
-	i, found := n.find(cfg.Compare, item)
+	i, found := n.find(cfg.cmp, item)
 	if n.leaf {
 		if found {
 			outK, outV, _ = n.removeAt(i)
