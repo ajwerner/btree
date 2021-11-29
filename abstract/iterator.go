@@ -22,7 +22,7 @@ func (i *Iterator[K, V, Aux, A, AP]) SeekGE(key K) {
 		return
 	}
 	for {
-		pos, found := i.find(i.r.cmp, key)
+		pos, found := i.find(i.r.td.cmp, key)
 		i.pos = int16(pos)
 		if found {
 			return
@@ -44,7 +44,7 @@ func (i *Iterator[K, V, Aux, A, AP]) SeekLT(key K) {
 		return
 	}
 	for {
-		pos, found := i.find(i.r.cmp, key)
+		pos, found := i.find(i.r.td.cmp, key)
 		i.pos = int16(pos)
 		if found || i.leaf {
 			i.Prev()

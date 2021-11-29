@@ -27,14 +27,20 @@ const (
 type Map[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
 	root   *node[K, V, Aux, A, AP]
 	length int
-	aux    Aux
-	cmp    func(K, K) int
+	td     treeData[K, Aux]
+}
+
+type treeData[K, Aux any] struct {
+	aux Aux
+	cmp func(K, K) int
 }
 
 func MakeMap[K, V, Aux, A any, AP Aug[K, Aux, A]](aux Aux, cmp func(K, K) int) Map[K, V, Aux, A, AP] {
 	return Map[K, V, Aux, A, AP]{
-		cmp: cmp,
-		aux: aux,
+		td: treeData[K, Aux]{
+			cmp: cmp,
+			aux: aux,
+		},
 	}
 }
 
@@ -78,7 +84,7 @@ func (t *Map[K, V, Aux, A, AP]) Delete(k K) (removedK K, v V, found bool) {
 	if t.root == nil || t.root.count == 0 {
 		return removedK, v, false
 	}
-	if removedK, v, found, _ = mut(&t.root).remove(t.aux, t.cmp, k); found {
+	if removedK, v, found, _ = mut(&t.root).remove(t.td, k); found {
 		t.length--
 	}
 	if t.root.count == 0 {
@@ -99,16 +105,16 @@ func (t *Map[K, V, Aux, A, AP]) Upsert(item K, value V) (replacedK K, replacedV 
 	if t.root == nil {
 		t.root = newLeafNode[K, V, Aux, A, AP]()
 	} else if t.root.count >= MaxEntries {
-		splitLaK, splitLaV, splitNode := mut(&t.root).split(t.aux, MaxEntries/2)
+		splitLaK, splitLaV, splitNode := mut(&t.root).split(&t.td, MaxEntries/2)
 		newRoot := newNode[K, V, Aux, A, AP]()
 		newRoot.count = 1
 		newRoot.keys[0] = splitLaK
 		newRoot.values[0] = splitLaV
 		newRoot.children[0] = t.root
-		t.root.update(t.aux)
-		splitNode.update(t.aux)
+		t.root.update(t.td.aux)
+		splitNode.update(t.td.aux)
 		newRoot.children[1] = splitNode
-		newRoot.update(t.aux)
+		newRoot.update(t.td.aux)
 		t.root = newRoot
 	}
 	replacedK, replacedV, replaced, _ = mut(&t.root).insert(t.aux, t.cmp, item, value)
