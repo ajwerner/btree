@@ -177,6 +177,7 @@ func (n *node[K, V, Aux, A, AP]) clone() *node[K, V, Aux, A, AP] {
 func (n *node[K, V, Aux, A, AP]) insertAt(index int, item K, value V, nd *node[K, V, Aux, A, AP]) {
 	if index < int(n.count) {
 		copy(n.keys[index+1:n.count+1], n.keys[index:n.count])
+		copy(n.values[index+1:n.count+1], n.values[index:n.count])
 		if !n.leaf {
 			copy(n.children[index+2:n.count+2], n.children[index+1:n.count+1])
 		}

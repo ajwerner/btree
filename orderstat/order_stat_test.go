@@ -84,4 +84,5 @@ func TestOrderStatNth(t *testing.T) {
 	clone := tree.Clone()
 	clone.Reset()
 	require.Equal(t, tree.Len(), len(perm))
+
 }

@@ -26,6 +26,12 @@ func (i *Iterator[K, V, Aux, A, AP]) lowLevel() *LowLevelIterator[K, V, Aux, A, 
 	return (*LowLevelIterator[K, V, Aux, A, AP])(i)
 }
 
+// Compare compares two keys using the same comparison function as the map.
+func (i *Iterator[K, V, Aux, A, AP]) Compare(a, b K) int {
+	return i.r.cfg.cmp(a, b)
+}
+
+// Reset marks the iterator as invalid and clears any state.
 func (i *Iterator[K, V, Aux, A, AP]) Reset() {
 	i.node = i.r.root
 	i.pos = -1

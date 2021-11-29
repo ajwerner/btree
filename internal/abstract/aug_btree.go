@@ -163,6 +163,16 @@ func (t *Map[K, V, Aux, A, AP]) Len() int {
 	return t.length
 }
 
+// Get returns the value associated with the requested key, if it exists.
+func (t *Map[K, V, Aux, A, AP]) Get(k K) (v V, ok bool) {
+	it := t.Iterator()
+	it.SeekGE(k)
+	if it.Valid() && it.Compare(it.Key(), k) == 0 {
+		return it.Value(), true
+	}
+	return v, false
+}
+
 // String returns a string description of the tree. The format is
 // similar to the https://en.wikipedia.org/wiki/Newick_format.
 func (t *Map[K, V, Aux, A, AP]) String() string {
