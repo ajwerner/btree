@@ -37,7 +37,7 @@ func (t *Map[K, V]) Delete(k K) (removedV V, removed bool) {
 }
 
 func (t *Map[K, V]) Iterator() Iterator[K, V] {
-	return Iterator[K, V]{t.t.MakeIter()}
+	return Iterator[K, V]{Iterator: t.t.MakeIter()}
 }
 
 type Set[K any] struct {
@@ -61,22 +61,12 @@ func (t *Set[K]) Delete(k K) (removedK K, removed bool) {
 }
 
 func (t *Set[K]) Iterator() Iterator[K, struct{}] {
-	return Iterator[K, struct{}]{t.t.MakeIter()}
+	return Iterator[K, struct{}]{Iterator: t.t.MakeIter()}
 }
 
 type Iterator[K, V any] struct {
-	it abstract.Iterator[K, V, struct{}, aug[K], *aug[K]]
+	abstract.Iterator[K, V, struct{}, aug[K], *aug[K]]
 }
-
-func (it *Iterator[K, V]) First()      { it.it.First() }
-func (it *Iterator[K, V]) Last()       { it.it.First() }
-func (it *Iterator[K, V]) Next()       { it.it.Next() }
-func (it *Iterator[K, V]) Prev()       { it.it.Prev() }
-func (it *Iterator[K, V]) SeekGE(k K)  { it.it.SeekGE(k) }
-func (it *Iterator[K, V]) SeekLT(k K)  { it.it.SeekLT(k) }
-func (it *Iterator[K, V]) Valid() bool { return it.it.Valid() }
-func (it *Iterator[K, V]) Key() K      { return it.it.Key() }
-func (it *Iterator[K, V]) Value() V    { return it.it.Value() }
 
 type aug[K any] struct{}
 

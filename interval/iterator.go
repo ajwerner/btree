@@ -22,31 +22,15 @@ import (
 )
 
 type Iterator[K, V any, I Interval[K]] struct {
-	it abstract.Iterator[I, V, CompareFn[K], aug[K, I], *aug[K, I]]
+	abstract.Iterator[I, V, CompareFn[K], aug[K, I], *aug[K, I]]
 
 	o overlapScan[I, K]
 }
 
 func (t *Map[K, V, I]) MakeIter() Iterator[K, V, I] {
 	return Iterator[K, V, I]{
-		it: t.t.MakeIter(),
+		Iterator: t.t.MakeIter(),
 	}
-}
-
-func (it *Iterator[K, V, I]) First() {
-	it.it.First()
-}
-
-func (it *Iterator[K, V, I]) Next() {
-	it.it.Next()
-}
-
-func (it *Iterator[K, V, I]) Valid() bool {
-	return it.it.Valid()
-}
-
-func (it *Iterator[K, V, I]) Key() I {
-	return it.it.Key()
 }
 
 // An overlap scan is a scan over all latches that overlap with the provided
@@ -119,8 +103,9 @@ func (o *overlapScan[I, K]) empty() bool {
 // provided search latch.
 func (i *Iterator[K, V, I]) FirstOverlap(bounds I) {
 	i.Reset()
-	i.it.IncrementPos()
-	if !i.it.Valid() {
+	it := lowLevel(i)
+	it.IncrementPos()
+	if !i.Valid() {
 		return
 	}
 	i.o = overlapScan[I, K]{bounds: bounds, set: true}
@@ -129,15 +114,21 @@ func (i *Iterator[K, V, I]) FirstOverlap(bounds I) {
 	i.findNextOverlap()
 }
 
+func lowLevel[K, V any, I Interval[K]](
+	it *Iterator[K, V, I],
+) *abstract.LowLevelIterator[I, V, CompareFn[K], aug[K, I], *aug[K, I]] {
+	return abstract.LowLevel[I, V, CompareFn[K], aug[K, I], *aug[K, I]](&it.Iterator)
+}
+
 func (i *Iterator[K, V, I]) Reset() {
 	i.o.reset()
-	i.it.Reset()
+	i.Iterator.Reset()
 }
 
 // NextOverlap positions the iterator to the latch immediately following
 // its current position that overlaps with the search latch.
 func (i *Iterator[K, V, I]) NextOverlap() {
-	if !i.it.Valid() {
+	if !i.Valid() {
 		return
 	}
 	if i.o.empty() {
@@ -145,14 +136,15 @@ func (i *Iterator[K, V, I]) NextOverlap() {
 		i.Reset()
 		return
 	}
-	i.it.IncrementPos()
+	lowLevel(i).IncrementPos()
 	i.findNextOverlap()
 }
 
 func (i *Iterator[K, V, I]) constrainMinSearchBounds() {
 	k := i.o.bounds.Key()
-	n := i.it.Node()
-	cmp := i.it.Aux()
+	ll := lowLevel(i)
+	n := ll.Node()
+	cmp := ll.Aux()
 	j := sort.Search(int(n.Count()), func(j int) bool {
 		return cmp(k, n.GetKey(int16(j)).Key()) <= 0
 	})
@@ -161,9 +153,10 @@ func (i *Iterator[K, V, I]) constrainMinSearchBounds() {
 }
 
 func (i *Iterator[K, V, I]) constrainMaxSearchBounds() {
-	cmp := i.it.Aux()
+	ll := lowLevel(i)
+	cmp := ll.Aux()
 	up := upperBound(i.o.bounds, cmp)
-	n := i.it.Node()
+	n := ll.Node()
 	j := sort.Search(int(n.Count()), func(j int) bool {
 		return !up.contains(cmp, n.GetKey(int16(j)).Key())
 	})
@@ -172,17 +165,18 @@ func (i *Iterator[K, V, I]) constrainMaxSearchBounds() {
 }
 
 func (i *Iterator[K, V, I]) findNextOverlap() {
-	cmp := i.it.Aux()
+	ll := lowLevel(i)
+	cmp := ll.Aux()
 	for {
-		if i.it.Pos() > i.it.Node().Count() {
+		if ll.Pos() > ll.Node().Count() {
 			// Iterate up tree.
-			i.it.Ascend()
-		} else if !i.it.Node().IsLeaf() {
+			ll.Ascend()
+		} else if !ll.Node().IsLeaf() {
 			// Iterate down tree.
-			if i.o.constrMinReached || i.it.Child().contains(cmp, i.o.bounds.Key()) {
-				par := i.it.Node()
-				pos := i.it.Pos()
-				i.it.Descend()
+			if i.o.constrMinReached || ll.Child().contains(cmp, i.o.bounds.Key()) {
+				par := ll.Node()
+				pos := ll.Pos()
+				ll.Descend()
 
 				// Refine the constraint bounds, if necessary.
 				if par == i.o.constrMinN && pos == i.o.constrMinPos {
@@ -196,18 +190,18 @@ func (i *Iterator[K, V, I]) findNextOverlap() {
 		}
 
 		// Check search bounds.
-		if i.it.Node() == i.o.constrMaxN && i.it.Pos() == i.o.constrMaxPos {
+		if ll.Node() == i.o.constrMaxN && ll.Pos() == i.o.constrMaxPos {
 			// Invalid. Past possible overlaps.
 			i.Reset()
 			return
 		}
-		if i.it.Node() == i.o.constrMinN && i.it.Pos() == i.o.constrMinPos {
+		if ll.Node() == i.o.constrMinN && ll.Pos() == i.o.constrMinPos {
 			// The scan reached the soft lower-bound constraint.
 			i.o.constrMinReached = true
 		}
 
 		// Iterate across node.
-		if i.it.Pos() < i.it.Node().Count() {
+		if ll.Pos() < ll.Node().Count() {
 			// Check for overlapping latch.
 			if i.o.constrMinReached {
 				// Fast-path to avoid span comparison. i.o.constrMinReached
@@ -215,10 +209,10 @@ func (i *Iterator[K, V, I]) findNextOverlap() {
 				// span's start key.
 				return
 			}
-			if upperBound(i.it.Key(), cmp).contains(cmp, i.o.bounds.Key()) {
+			if upperBound(i.Key(), cmp).contains(cmp, i.o.bounds.Key()) {
 				return
 			}
 		}
-		i.it.IncrementPos()
+		ll.IncrementPos()
 	}
 }
