@@ -30,8 +30,9 @@ func TestOrderStatTree(t *testing.T) {
 	tree.Upsert(4, 3)
 	iter := tree.Iterator()
 	iter.First()
-	for _, exp := range []int{2, 3, 4, 5} {
+	for i, exp := range []int{2, 3, 4, 5} {
 		require.Equal(t, exp, iter.Key())
+		require.Equal(t, i, iter.Rank())
 		iter.Next()
 	}
 	iter.Nth(2)

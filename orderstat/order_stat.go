@@ -61,56 +61,76 @@ func (t *Map[K, V]) Delete(k K) (removedVal V, removed bool) {
 }
 
 type Iterator[K, V any] struct {
-	it abstract.Iterator[K, V, struct{}, aug[K], *aug[K]]
+	abstract.Iterator[K, V, struct{}, aug[K], *aug[K]]
 }
 
 func (t *Map[K, V]) Iterator() Iterator[K, V] {
-	return Iterator[K, V]{it: t.t.MakeIter()}
+	return Iterator[K, V]{Iterator: t.t.MakeIter()}
 }
 
 func (t *Set[K]) Iterator() Iterator[K, struct{}] {
-	return Iterator[K, struct{}]{it: t.t.MakeIter()}
+	return Iterator[K, struct{}]{Iterator: t.t.MakeIter()}
 }
 
-func (it *Iterator[K, V]) Nth(i int) {
-	seekNth[K](&it.it, i)
+func lowLevel[K, V any](
+	it *Iterator[K, V],
+) *abstract.LowLevelIterator[K, V, struct{}, aug[K], *aug[K]] {
+	return abstract.LowLevel(&it.Iterator)
 }
 
-type iteratorForSeek[K any] interface {
-	Reset()
-	IsLeaf() bool
-	IncrementPos()
-	SetPos(int16)
-	Child() *aug[K]
-	Descend()
+func (it *Iterator[K, V]) Rank() int {
+	if !it.Valid() {
+		return -1
+	}
+	ll := lowLevel(it)
+	// If this is the root, then we want to figure out how many children are
+	// below the current point.
+
+	// Otherwise, we need to go up to the current parent, calculate everything
+	// less and then drop back down to the current node and add everything less.
+	var before int
+	if ll.Depth() > 0 {
+		pos := ll.Pos()
+		ll.Ascend()
+		for i, parentPos := int16(0), ll.Pos(); i < parentPos; i++ {
+			before += ll.GetChild(i).children
+		}
+		before += int(ll.Pos())
+		ll.Descend()
+		ll.SetPos(pos)
+	}
+	if !ll.IsLeaf() {
+		for i, pos := int16(0), ll.Pos(); i <= pos; i++ {
+			before += ll.GetChild(i).children
+		}
+	}
+	before += int(ll.Pos())
+	return before
 }
 
-var onErrorf = func(format string, args ...interface{}) {
-	panic(fmt.Errorf(format, args...))
-}
-
-func seekNth[K any, It iteratorForSeek[K]](it It, nth int) {
+func (it *Iterator[K, V]) Nth(nth int) {
+	it.Reset()
 	// Reset has bizarre semantics in that it initializes the iterator to
 	// an invalid position (-1) at the root of the tree. IncrementPos moves it
 	// to the first child and item of the
-	it.Reset()
-	it.IncrementPos()
+	ll := lowLevel(it)
+	ll.IncrementPos()
 	n := 0
 	for n <= nth {
-		if it.IsLeaf() {
+		if ll.IsLeaf() {
 			// If we're in the leaf, then, by construction, we can find
 			// the relevant position and seek to it in constant time.
 			//
 			// TODO(ajwerner): Add more invariant checking.
-			it.SetPos(int16(nth - n))
+			ll.SetPos(int16(nth - n))
 			return
 		}
-		a := it.Child()
+		a := ll.Child()
 		if a == nil {
 			onErrorf("failed to visit child")
 		}
 		if n+a.children > nth {
-			it.Descend()
+			ll.Descend()
 			continue
 		}
 
@@ -119,7 +139,7 @@ func seekNth[K any, It iteratorForSeek[K]](it It, nth int) {
 		case n < nth:
 			// Consume the current value, move on to the next one.
 			n++
-			it.IncrementPos()
+			ll.IncrementPos()
 		case n == nth:
 			return // found it
 		default:
@@ -128,12 +148,6 @@ func seekNth[K any, It iteratorForSeek[K]](it It, nth int) {
 	}
 }
 
-func (it *Iterator[K, V]) First()      { it.it.First() }
-func (it *Iterator[K, V]) Last()       { it.it.First() }
-func (it *Iterator[K, V]) Next()       { it.it.Next() }
-func (it *Iterator[K, V]) Prev()       { it.it.Prev() }
-func (it *Iterator[K, V]) SeekGE(k K)  { it.it.SeekGE(k) }
-func (it *Iterator[K, V]) SeekLT(k K)  { it.it.SeekLT(k) }
-func (it *Iterator[K, V]) Valid() bool { return it.it.Valid() }
-func (it *Iterator[K, V]) Key() K      { return it.it.Key() }
-func (it *Iterator[K, V]) Value() V    { return it.it.Value() }
+var onErrorf = func(format string, args ...interface{}) {
+	panic(fmt.Errorf(format, args...))
+}

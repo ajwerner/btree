@@ -23,8 +23,8 @@ type Iterator[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
 	// TODO(ajwerner): Add back augmented search
 }
 
-func (i *Iterator[K, V, Aux, A, AP]) Aux() Aux {
-	return i.r.td.aux
+func (i *Iterator[K, V, Aux, A, AP]) lowLevel() *LowLevelIterator[K, V, Aux, A, AP] {
+	return (*LowLevelIterator[K, V, Aux, A, AP])(i)
 }
 
 func (i *Iterator[K, V, Aux, A, AP]) Reset() {
@@ -40,6 +40,7 @@ func (i *Iterator[K, V, Aux, A, AP]) SeekGE(key K) {
 	if i.node == nil {
 		return
 	}
+	ll := i.lowLevel()
 	for {
 		pos, found := i.find(i.r.td.cmp, key)
 		i.pos = int16(pos)
@@ -52,7 +53,7 @@ func (i *Iterator[K, V, Aux, A, AP]) SeekGE(key K) {
 			}
 			return
 		}
-		i.Descend()
+		ll.Descend()
 	}
 }
 
@@ -62,6 +63,7 @@ func (i *Iterator[K, V, Aux, A, AP]) SeekLT(key K) {
 	if i.node == nil {
 		return
 	}
+	ll := i.lowLevel()
 	for {
 		pos, found := i.find(i.r.td.cmp, key)
 		i.pos = int16(pos)
@@ -69,7 +71,7 @@ func (i *Iterator[K, V, Aux, A, AP]) SeekLT(key K) {
 			i.Prev()
 			return
 		}
-		i.Descend()
+		ll.Descend()
 	}
 }
 
@@ -80,8 +82,9 @@ func (i *Iterator[K, V, Aux, A, AP]) First() {
 	if i.node == nil {
 		return
 	}
+	ll := i.lowLevel()
 	for !i.leaf {
-		i.Descend()
+		ll.Descend()
 	}
 	i.pos = 0
 }
@@ -92,18 +95,13 @@ func (i *Iterator[K, V, Aux, A, AP]) Last() {
 	if i.node == nil {
 		return
 	}
+	ll := i.lowLevel()
 	for !i.leaf {
 		i.pos = i.count
-		i.Descend()
+		ll.Descend()
 	}
 	i.pos = i.count - 1
 }
-
-func (i *Iterator[K, V, Aux, A, AP]) IncrementPos() {
-	i.SetPos(i.pos + 1)
-}
-
-func (i *Iterator[K, V, Aux, A, AP]) SetPos(pos int16) { i.pos = pos }
 
 // Next positions the Iterator to the key immediately following
 // its current position.
@@ -111,22 +109,22 @@ func (i *Iterator[K, V, Aux, A, AP]) Next() {
 	if i.node == nil {
 		return
 	}
-
+	ll := i.lowLevel()
 	if i.leaf {
 		i.pos++
 		if i.pos < i.count {
 			return
 		}
 		for i.s.len() > 0 && i.pos >= i.count {
-			i.Ascend()
+			ll.Ascend()
 		}
 		return
 	}
 	i.pos++
-	i.Descend()
+	ll.Descend()
 	for !i.leaf {
 		i.pos = 0
-		i.Descend()
+		ll.Descend()
 	}
 	i.pos = 0
 }
@@ -137,23 +135,23 @@ func (i *Iterator[K, V, Aux, A, AP]) Prev() {
 	if i.node == nil {
 		return
 	}
-
+	ll := i.lowLevel()
 	if i.leaf {
 		i.pos--
 		if i.pos >= 0 {
 			return
 		}
 		for i.s.len() > 0 && i.pos < 0 {
-			i.Ascend()
+			ll.Ascend()
 			i.pos--
 		}
 		return
 	}
 
-	i.Descend()
+	ll.Descend()
 	for !i.leaf {
 		i.pos = i.count
-		i.Descend()
+		ll.Descend()
 	}
 	i.pos = i.count - 1
 }
@@ -171,38 +169,4 @@ func (i *Iterator[K, V, Aux, A, AP]) Key() K {
 
 func (i *Iterator[K, V, Aux, A, AP]) Value() V {
 	return i.values[i.pos]
-}
-
-func (i *Iterator[K, V, Aux, A, AP]) IsLeaf() bool {
-	return i.leaf
-}
-
-func (i *Iterator[K, V, Aux, A, AP]) Node() Node[K, *A] {
-	return i.node
-}
-
-func (i *Iterator[K, V, Aux, A, AP]) Pos() int16 {
-	return i.pos
-}
-
-func (i *Iterator[K, V, Aux, A, AP]) makeFrame(n *node[K, V, Aux, A, AP], pos int16) iterFrame[K, V, Aux, A, AP] {
-	return iterFrame[K, V, Aux, A, AP]{
-		node: n,
-		pos:  pos,
-	}
-}
-
-func (i *Iterator[K, V, Aux, A, AP]) Child() AP {
-	return &i.children[i.pos].aug
-}
-
-func (i *Iterator[K, V, Aux, A, AP]) Descend() {
-	i.s.push(i.iterFrame)
-	i.iterFrame = i.makeFrame(i.children[i.pos], 0)
-}
-
-// ascend ascends up to the current node's parent and resets the position
-// to the one previously set for this parent node.
-func (i *Iterator[K, V, Aux, A, AP]) Ascend() {
-	i.iterFrame = i.s.pop()
 }
