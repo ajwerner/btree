@@ -22,7 +22,7 @@ import (
 )
 
 type Iterator[I, K, V any] struct {
-	abstract.Iterator[I, V, config[I, K], aug[ I, K], *aug[ I, K]]
+	abstract.Iterator[I, V, config[I, K], aug[I, K], *aug[I, K]]
 
 	o overlapScan[I, K]
 }
@@ -75,13 +75,13 @@ type overlapScan[I, K any] struct {
 	bounds I
 
 	// The "soft" lower-bound constraint.
-	constrMinN       abstract.Node[I, *aug[ I, K]]
+	constrMinN       abstract.Node[I, *aug[I, K]]
 	constrMinPos     int16
 	constrMinReached bool
 	set              bool
 
 	// The "hard" upper-bound constraint.
-	constrMaxN   abstract.Node[I, *aug[ I, K]]
+	constrMaxN   abstract.Node[I, *aug[I, K]]
 	constrMaxPos int16
 }
 
@@ -138,7 +138,7 @@ func (i *Iterator[I, K, V]) constrainMinSearchBounds() {
 
 	ll := lowLevel(i)
 	cfg := ll.Config().Aux
-	cmp :=cfg.compareK
+	cmp := cfg.compareK
 	n := ll.Node()
 	k := cfg.getKey(i.o.bounds)
 	j := sort.Search(int(ll.Count()), func(j int) bool {
@@ -152,7 +152,7 @@ func (i *Iterator[I, K, V]) constrainMaxSearchBounds() {
 	ll := lowLevel(i)
 	cfg := &ll.Config().Aux
 	cmp := cfg.compareK
-	up := upperBound[I](cfg, i.o.bounds)
+	up := upperBound(cfg, i.o.bounds)
 	n := ll.Node()
 	j := sort.Search(int(n.Count()), func(j int) bool {
 		return !up.contains(cmp, cfg.getKey(n.GetKey(int16(j))))

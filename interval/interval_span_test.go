@@ -504,3 +504,305 @@ func all(tr *Map[*latch, Key, struct{}]) (out []*latch) {
 	}
 	return out
 }
+
+func forBenchmarkSizes(b *testing.B, f func(b *testing.B, count int)) {
+	for _, count := range []int{16, 128, 1024, 8192, 65536} {
+		b.Run(fmt.Sprintf("count=%d", count), func(b *testing.B) {
+			f(b, count)
+		})
+	}
+}
+
+func BenchmarkBTreeInsert(b *testing.B) {
+	forBenchmarkSizes(b, func(b *testing.B, count int) {
+		insertP := perm(count)
+		b.ResetTimer()
+		for i := 0; i < b.N; {
+			tr := makeBTree()
+			for _, la := range insertP {
+				tr.Upsert(la, struct{}{})
+				i++
+				if i >= b.N {
+					return
+				}
+			}
+		}
+	})
+}
+
+func BenchmarkBTreeDelete(b *testing.B) {
+	forBenchmarkSizes(b, func(b *testing.B, count int) {
+		insertP, removeP := perm(count), perm(count)
+		b.ResetTimer()
+		for i := 0; i < b.N; {
+			b.StopTimer()
+			tr := makeBTree()
+			for _, la := range insertP {
+				tr.Upsert(la, struct{}{})
+			}
+			b.StartTimer()
+			for _, la := range removeP {
+				tr.Delete(la)
+				i++
+				if i >= b.N {
+					return
+				}
+			}
+			if tr.Len() > 0 {
+				b.Fatalf("tree not empty: %s", &tr)
+			}
+		}
+	})
+}
+
+func BenchmarkBTreeDeleteInsert(b *testing.B) {
+	forBenchmarkSizes(b, func(b *testing.B, count int) {
+		insertP := perm(count)
+		tr := makeBTree()
+		for _, la := range insertP {
+			tr.Upsert(la, struct{}{})
+		}
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			la := insertP[i%count]
+			tr.Delete(la)
+			tr.Upsert(la, struct{}{})
+		}
+	})
+}
+
+func BenchmarkBTreeDeleteInsertCloneOnce(b *testing.B) {
+	forBenchmarkSizes(b, func(b *testing.B, count int) {
+		insertP := perm(count)
+		tr := makeBTree()
+		for _, la := range insertP {
+			tr.Upsert(la, struct{}{})
+		}
+		tr = tr.Clone()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			la := insertP[i%count]
+			tr.Delete(la)
+			tr.Upsert(la, struct{}{})
+		}
+	})
+}
+
+func BenchmarkBTreeDeleteInsertCloneEachTime(b *testing.B) {
+	for _, reset := range []bool{false, true} {
+		b.Run(fmt.Sprintf("reset=%t", reset), func(b *testing.B) {
+			forBenchmarkSizes(b, func(b *testing.B, count int) {
+				insertP := perm(count)
+				tr, trReset := makeBTree(), makeBTree()
+				for _, la := range insertP {
+					tr.Upsert(la, struct{}{})
+				}
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					la := insertP[i%count]
+					if reset {
+						trReset.Reset()
+						trReset = tr
+					}
+					tr = tr.Clone()
+					tr.Delete(la)
+					tr.Upsert(la, struct{}{})
+				}
+			})
+		})
+	}
+}
+
+func BenchmarkBTreeMakeIter(b *testing.B) {
+	tr := makeBTree()
+	for i := 0; i < b.N; i++ {
+		it := tr.Iterator()
+		it.First()
+	}
+}
+
+func BenchmarkBTreeIterSeekGE(b *testing.B) {
+	forBenchmarkSizes(b, func(b *testing.B, count int) {
+		var spans []Span
+		tr := makeBTree()
+
+		for i := 0; i < count; i++ {
+			s := span(i)
+			spans = append(spans, s)
+			tr.Upsert(newLatch(s), struct{}{})
+		}
+
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		it := tr.Iterator()
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			s := spans[rng.Intn(len(spans))]
+			it.SeekGE(newLatch(s))
+			if testing.Verbose() {
+				if !it.Valid() {
+					b.Fatal("expected to find key")
+				}
+				if !s.Equal(it.Key().span) {
+					b.Fatalf("expected %s, but found %s", s, it.Key().span)
+				}
+			}
+		}
+	})
+}
+
+func BenchmarkBTreeIterSeekLT(b *testing.B) {
+	forBenchmarkSizes(b, func(b *testing.B, count int) {
+		var spans []Span
+		tr := makeBTree()
+
+		for i := 0; i < count; i++ {
+			s := span(i)
+			spans = append(spans, s)
+			tr.Upsert(newLatch(s), struct{}{})
+		}
+
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		it := tr.Iterator()
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			j := rng.Intn(len(spans))
+			s := spans[j]
+			it.SeekLT(newLatch(s))
+			if testing.Verbose() {
+				if j == 0 {
+					if it.Valid() {
+						b.Fatal("unexpected key")
+					}
+				} else {
+					if !it.Valid() {
+						b.Fatal("expected to find key")
+					}
+					s := spans[j-1]
+					if !s.Equal(it.Key().span) {
+						b.Fatalf("expected %s, but found %s", s, it.Key().span)
+					}
+				}
+			}
+		}
+	})
+}
+
+func BenchmarkBTreeIterFirstOverlap(b *testing.B) {
+	forBenchmarkSizes(b, func(b *testing.B, count int) {
+		var spans []Span
+		var latches []*latch
+		tr := makeBTree()
+
+		for i := 0; i < count; i++ {
+			s := spanWithEnd(i, i+1)
+			spans = append(spans, s)
+			la := newLatch(s)
+			latches = append(latches, la)
+			tr.Upsert(la, struct{}{})
+		}
+
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		it := tr.Iterator()
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			j := rng.Intn(len(spans))
+			s := spans[j]
+			la := latches[j]
+			it.FirstOverlap(la)
+			if testing.Verbose() {
+				if !it.Valid() {
+					b.Fatal("expected to find key")
+				}
+				if !s.Equal(it.Key().span) {
+					b.Fatalf("expected %s, but found %s", s, it.Key().span)
+				}
+			}
+		}
+	})
+}
+
+func BenchmarkBTreeIterNext(b *testing.B) {
+	tr := makeBTree()
+
+	const count = 8 << 10
+	const size = 2 * abstract.MaxEntries
+	for i := 0; i < count; i++ {
+		la := newLatch(spanWithEnd(i, i+size+1))
+		tr.Upsert(la, struct{}{})
+	}
+
+	it := tr.Iterator()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if !it.Valid() {
+			it.First()
+		}
+		it.Next()
+	}
+}
+
+func BenchmarkBTreeIterPrev(b *testing.B) {
+	tr := makeBTree()
+
+	const count = 8 << 10
+	const size = 2 * abstract.MaxEntries
+	for i := 0; i < count; i++ {
+		la := newLatch(spanWithEnd(i, i+size+1))
+		tr.Upsert(la, struct{}{})
+	}
+
+	it := tr.Iterator()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if !it.Valid() {
+			it.First()
+		}
+		it.Prev()
+	}
+}
+
+func BenchmarkBTreeIterNextOverlap(b *testing.B) {
+	tr := makeBTree()
+
+	const count = 8 << 10
+	const size = 2 * abstract.MaxEntries
+	for i := 0; i < count; i++ {
+		la := newLatch(spanWithEnd(i, i+size+1))
+		tr.Upsert(la, struct{}{})
+	}
+
+	allCmd := newLatch(spanWithEnd(0, count+1))
+	it := tr.Iterator()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if !it.Valid() {
+			it.FirstOverlap(allCmd)
+		}
+		it.NextOverlap()
+	}
+}
+
+func BenchmarkBTreeIterOverlapScan(b *testing.B) {
+	tr := makeBTree()
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	const count = 8 << 10
+	const size = 2 * abstract.MaxEntries
+	for i := 0; i < count; i++ {
+		tr.Upsert(newLatch(spanWithEnd(i, i+size+1)), struct{}{})
+	}
+
+	la := new(latch)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		la.span = randomSpan(rng, count)
+		it := tr.Iterator()
+		it.FirstOverlap(la)
+		for it.Valid() {
+			it.NextOverlap()
+		}
+	}
+}
