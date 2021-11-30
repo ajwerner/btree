@@ -19,7 +19,7 @@ import "github.com/ajwerner/btree/internal/abstract"
 // Map is a ordered map from I to V where I is an interval. Its iterator
 // provides efficient overlap queries.
 type Map[I, K, V any] struct {
-	abstract.Map[I, V, config[I, K], aug[I, K], *aug[I, K]]
+	abstract.Map[I, V, aug[K]]
 }
 
 type config[I, K any] struct {
@@ -31,13 +31,13 @@ type config[I, K any] struct {
 // for intervals and for their bounds.
 func MakeMap[I, K, V any](cmpK Cmp[K], cmpI Cmp[I], key, endKey func(I) K) Map[I, K, V] {
 	return Map[I, K, V]{
-		Map: abstract.MakeMap[I, V, config[I, K], aug[I, K]](
-			config[I, K]{
-				cmp:       cmpK,
-				getKey:    key,
-				getEndKey: endKey,
-			},
+		Map: abstract.MakeMap[I, V, aug[K]](
 			cmpI,
+			&updater[I, K]{
+				cmp: cmpK,
+				key: key,
+				end: endKey,
+			},
 		),
 	}
 }

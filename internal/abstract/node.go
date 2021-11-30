@@ -21,33 +21,37 @@ import (
 	"sync/atomic"
 )
 
-type interiorNode[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
-	node[K, V, Aux, A, AP]
-	children [MaxEntries + 1]*node[K, V, Aux, A, AP]
-}
-
-type node[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
+type node[K, V, A any] struct {
 	ref      int32
 	count    int16
 	aug      A
 	keys     [MaxEntries]K
 	values   [MaxEntries]V
-	children *[MaxEntries + 1]*node[K, V, Aux, A, AP]
+	children *[MaxEntries + 1]*node[K, V, A]
 }
 
-func (n *node[K, V, Aux, A, AP]) IsLeaf() bool {
+type interiorNode[K, V, A any] struct {
+	node[K, V, A]
+	children [MaxEntries + 1]*node[K, V, A]
+}
+
+func (n *node[K, V, A]) GetA() *A {
+	return &n.aug
+}
+
+func (n *node[K, V, A]) IsLeaf() bool {
 	return n.children == nil
 }
 
-func (n *node[K, V, Aux, A, AP]) Count() int16 {
+func (n *node[K, V, A]) Count() int16 {
 	return n.count
 }
 
-func (n *node[K, V, Aux, A, AP]) GetKey(i int16) K {
+func (n *node[K, V, A]) GetKey(i int16) K {
 	return n.keys[i]
 }
 
-func (n *node[K, V, Aux, A, AP]) GetChild(i int16) *A {
+func (n *node[K, V, A]) GetChild(i int16) *A {
 	if !n.IsLeaf() && n.children[i] != nil {
 		return &n.children[i].aug
 	}
@@ -63,10 +67,10 @@ func (n *node[K, V, Aux, A, AP]) GetChild(i int16) *A {
 //
 // When a node is cloned, the provided pointer will be redirected to the new
 // mutable node.
-func mut[K, V, Aux, A any, AP Aug[K, Aux, A]](
-	np *nodePool[K, V, Aux, A, AP],
-	n **node[K, V, Aux, A, AP],
-) *node[K, V, Aux, A, AP] {
+func mut[K, V, A any](
+	np *nodePool[K, V, A],
+	n **node[K, V, A],
+) *node[K, V, A] {
 	if atomic.LoadInt32(&(*n).ref) == 1 {
 		// Exclusive ownership. Can mutate in place.
 		return *n
@@ -84,14 +88,14 @@ func mut[K, V, Aux, A any, AP Aug[K, Aux, A]](
 }
 
 // incRef acquires a reference to the node.
-func (n *node[K, V, Aux, A, AP]) incRef() {
+func (n *node[K, V, A]) incRef() {
 	atomic.AddInt32(&n.ref, 1)
 }
 
 // decRef releases a reference to the node. If requested, the method
 // will recurse into child nodes and decrease their refcounts as well.
-func (n *node[K, V, Aux, A, AP]) decRef(
-	np *nodePool[K, V, Aux, A, AP], recursive bool,
+func (n *node[K, V, A]) decRef(
+	np *nodePool[K, V, A], recursive bool,
 ) {
 	if atomic.AddInt32(&n.ref, -1) > 0 {
 		// Other references remain. Can't free.
@@ -112,10 +116,10 @@ func (n *node[K, V, Aux, A, AP]) decRef(
 }
 
 // clone creates a clone of the receiver with a single reference count.
-func (n *node[K, V, Aux, A, AP]) clone(
-	np *nodePool[K, V, Aux, A, AP],
-) *node[K, V, Aux, A, AP] {
-	var c *node[K, V, Aux, A, AP]
+func (n *node[K, V, A]) clone(
+	np *nodePool[K, V, A],
+) *node[K, V, A] {
+	var c *node[K, V, A]
 	if n.IsLeaf() {
 		c = np.getLeafNode()
 	} else {
@@ -136,7 +140,7 @@ func (n *node[K, V, Aux, A, AP]) clone(
 	return c
 }
 
-func (n *node[K, V, Aux, A, AP]) insertAt(index int, item K, value V, nd *node[K, V, Aux, A, AP]) {
+func (n *node[K, V, A]) insertAt(index int, item K, value V, nd *node[K, V, A]) {
 	if index < int(n.count) {
 		copy(n.keys[index+1:n.count+1], n.keys[index:n.count])
 		copy(n.values[index+1:n.count+1], n.values[index:n.count])
@@ -152,7 +156,7 @@ func (n *node[K, V, Aux, A, AP]) insertAt(index int, item K, value V, nd *node[K
 	n.count++
 }
 
-func (n *node[K, V, Aux, A, AP]) pushBack(item K, value V, nd *node[K, V, Aux, A, AP]) {
+func (n *node[K, V, A]) pushBack(item K, value V, nd *node[K, V, A]) {
 	n.keys[n.count] = item
 	n.values[n.count] = value
 	if !n.IsLeaf() {
@@ -161,7 +165,7 @@ func (n *node[K, V, Aux, A, AP]) pushBack(item K, value V, nd *node[K, V, Aux, A
 	n.count++
 }
 
-func (n *node[K, V, Aux, A, AP]) pushFront(item K, value V, nd *node[K, V, Aux, A, AP]) {
+func (n *node[K, V, A]) pushFront(item K, value V, nd *node[K, V, A]) {
 	if !n.IsLeaf() {
 		copy(n.children[1:n.count+2], n.children[:n.count+1])
 		n.children[0] = nd
@@ -175,8 +179,8 @@ func (n *node[K, V, Aux, A, AP]) pushFront(item K, value V, nd *node[K, V, Aux, 
 
 // removeAt removes a value at a given index, pulling all subsequent values
 // back.
-func (n *node[K, V, Aux, A, AP]) removeAt(index int) (K, V, *node[K, V, Aux, A, AP]) {
-	var child *node[K, V, Aux, A, AP]
+func (n *node[K, V, A]) removeAt(index int) (K, V, *node[K, V, A]) {
+	var child *node[K, V, A]
 	if !n.IsLeaf() {
 		child = n.children[index+1]
 		copy(n.children[index+1:n.count], n.children[index+2:n.count+1])
@@ -195,7 +199,7 @@ func (n *node[K, V, Aux, A, AP]) removeAt(index int) (K, V, *node[K, V, Aux, A, 
 }
 
 // popBack removes and returns the last element in the list.
-func (n *node[K, V, Aux, A, AP]) popBack() (K, V, *node[K, V, Aux, A, AP]) {
+func (n *node[K, V, A]) popBack() (K, V, *node[K, V, A]) {
 	n.count--
 	outK := n.keys[n.count]
 	outV := n.values[n.count]
@@ -212,9 +216,9 @@ func (n *node[K, V, Aux, A, AP]) popBack() (K, V, *node[K, V, Aux, A, AP]) {
 }
 
 // popFront removes and returns the first element in the list.
-func (n *node[K, V, Aux, A, AP]) popFront() (K, V, *node[K, V, Aux, A, AP]) {
+func (n *node[K, V, A]) popFront() (K, V, *node[K, V, A]) {
 	n.count--
-	var child *node[K, V, Aux, A, AP]
+	var child *node[K, V, A]
 	if !n.IsLeaf() {
 		child = n.children[0]
 		copy(n.children[:n.count+1], n.children[1:n.count+2])
@@ -234,7 +238,7 @@ func (n *node[K, V, Aux, A, AP]) popFront() (K, V, *node[K, V, Aux, A, AP]) {
 // find returns the index where the given item should be inserted into this
 // list. 'found' is true if the item already exists in the list at the given
 // index.
-func (n *node[K, V, Aux, A, AP]) find(cmp func(K, K) int, item K) (index int, found bool) {
+func (n *node[K, V, A]) find(cmp func(K, K) int, item K) (index int, found bool) {
 	// Logic copied from sort.Search. Inlining this gave
 	// an 11% speedup on BenchmarkBTreeDeleteInsert.
 	i, j := 0, int(n.count)
@@ -274,10 +278,10 @@ func (n *node[K, V, Aux, A, AP]) find(cmp func(K, K) int, item K) (index int, fo
 // |         x |     | z         |
 // +-----------+     +-----------+
 //
-func (n *node[K, V, Aux, A, AP]) split(cfg *config[K, V, Aux, A, AP], i int) (K, V, *node[K, V, Aux, A, AP]) {
+func (n *node[K, V, A]) split(cfg *config[K, V, A], i int) (K, V, *node[K, V, A]) {
 	outK := n.keys[i]
 	outV := n.values[i]
-	var next *node[K, V, Aux, A, AP]
+	var next *node[K, V, A]
 	if n.IsLeaf() {
 		next = cfg.np.getLeafNode()
 	} else {
@@ -304,15 +308,21 @@ func (n *node[K, V, Aux, A, AP]) split(cfg *config[K, V, Aux, A, AP], i int) (K,
 	return outK, outV, next
 }
 
-func (n *node[K, V, Aux, A, AP]) update(cfg *Config[K, Aux]) bool {
+func (n *node[K, V, A]) update(cfg *Config[K, A]) bool {
 	return n.updateWithMeta(cfg, UpdateMeta[K, A]{})
 }
 
-func (n *node[K, V, Aux, A, AP]) updateWithMeta(cfg *Config[K, Aux], md UpdateMeta[K, A]) bool {
-	return AP(&n.aug).Update(cfg, n, md)
+func (n *node[K, V, A]) updateWithMeta(cfg *Config[K, A], md UpdateMeta[K, A]) bool {
+	if cfg.Updater == nil {
+		return false
+	}
+	return cfg.Updater.Update(n, md)
 }
 
-func (n *node[K, V, Aux, A, AP]) updateOn(cfg *Config[K, Aux], action Action, k K, affected *node[K, V, Aux, A, AP]) bool {
+func (n *node[K, V, A]) updateOn(cfg *Config[K, A], action Action, k K, affected *node[K, V, A]) bool {
+	if cfg.Updater == nil {
+		return false
+	}
 	var a *A
 	if affected != nil {
 		a = &affected.aug
@@ -328,7 +338,7 @@ func (n *node[K, V, Aux, A, AP]) updateOn(cfg *Config[K, Aux], action Action, k 
 // nodes in the suAugBTree exceed MaxEntries keys. Returns true if an existing item
 // was replaced and false if an item was inserted. Also returns whether the
 // node's upper bound changes.
-func (n *node[K, V, Aux, A, AP]) insert(cfg *config[K, V, Aux, A, AP], item K, value V) (replacedK K, replacedV V, replaced, newBound bool) {
+func (n *node[K, V, A]) insert(cfg *config[K, V, A], item K, value V) (replacedK K, replacedV V, replaced, newBound bool) {
 	i, found := n.find(cfg.cmp, item)
 	if found {
 		replacedV = n.values[i]
@@ -369,7 +379,7 @@ func (n *node[K, V, Aux, A, AP]) insert(cfg *config[K, V, Aux, A, AP], item K, v
 
 // removeMax removes and returns the maximum item from the suAugBTree rooted at
 // this node.
-func (n *node[K, V, Aux, A, AP]) removeMax(cfg *config[K, V, Aux, A, AP]) (K, V) {
+func (n *node[K, V, A]) removeMax(cfg *config[K, V, A]) (K, V) {
 	if n.IsLeaf() {
 		n.count--
 		outK := n.keys[n.count]
@@ -396,8 +406,8 @@ func (n *node[K, V, Aux, A, AP]) removeMax(cfg *config[K, V, Aux, A, AP]) (K, V)
 
 // rebalanceOrMerge grows child 'i' to ensure it has sufficient room to remove
 // an item from it while keeping it at or above MinItems.
-func (n *node[K, V, Aux, A, AP]) rebalanceOrMerge(
-	cfg *config[K, V, Aux, A, AP], i int,
+func (n *node[K, V, A]) rebalanceOrMerge(
+	cfg *config[K, V, A], i int,
 ) {
 	switch {
 	case i > 0 && n.children[i-1].count > MinEntries:
@@ -523,8 +533,8 @@ func (n *node[K, V, Aux, A, AP]) rebalanceOrMerge(
 // remove removes an item from the suAugBTree rooted at this node. Returns the item
 // that was removed or nil if no matching item was found. Also returns whether
 // the node's upper bound changes.
-func (n *node[K, V, Aux, A, AP]) remove(
-	cfg *config[K, V, Aux, A, AP], item K,
+func (n *node[K, V, A]) remove(
+	cfg *config[K, V, A], item K,
 ) (outK K, outV V, found, newBound bool) {
 	i, found := n.find(cfg.cmp, item)
 	if n.IsLeaf() {
@@ -557,7 +567,7 @@ func (n *node[K, V, Aux, A, AP]) remove(
 	return outK, outV, found, newBound
 }
 
-func (n *node[K, V, Aux, A, AP]) writeString(b *strings.Builder) {
+func (n *node[K, V, A]) writeString(b *strings.Builder) {
 	if n.IsLeaf() {
 		for i := int16(0); i < n.count; i++ {
 			if i != 0 {

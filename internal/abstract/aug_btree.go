@@ -39,16 +39,16 @@ const (
 //
 // Write operations are not safe for concurrent mutation by multiple
 // goroutines, but Read operations are.
-type Map[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
-	root   *node[K, V, Aux, A, AP]
+type Map[K, V, A any] struct {
+	root   *node[K, V, A]
 	length int
-	cfg    config[K, V, Aux, A, AP]
+	cfg    config[K, V, A]
 }
 
 // MakeMap constructs a new Map.
-func MakeMap[K, V, Aux, A any, AP Aug[K, Aux, A]](aux Aux, cmp func(K, K) int) Map[K, V, Aux, A, AP] {
-	return Map[K, V, Aux, A, AP]{
-		cfg: makeConfig[K, V, Aux, A, AP](aux, cmp),
+func MakeMap[K, V, A any](cmp func(K, K) int, up Updater[K, A]) Map[K, V, A] {
+	return Map[K, V, A]{
+		cfg: makeConfig[K, V](cmp, up),
 	}
 }
 
@@ -56,7 +56,7 @@ func MakeMap[K, V, Aux, A any, AP Aug[K, Aux, A]](aux Aux, cmp func(K, K) int) M
 // held by the AugBTree to be recycled. Failure to call this method before
 // letting a AugBTree be GCed is safe in that it won't cause a memory leak,
 // but it will prevent AugBTree nodes from being efficiently re-used.
-func (t *Map[K, V, Aux, A, AP]) Reset() {
+func (t *Map[K, V, A]) Reset() {
 	if t.root != nil {
 		t.root.decRef(t.cfg.np, true /* recursive */)
 		t.root = nil
@@ -65,7 +65,7 @@ func (t *Map[K, V, Aux, A, AP]) Reset() {
 }
 
 // Clone clones the AugBTree, lazily. It does so in constant time.
-func (t *Map[K, V, Aux, A, AP]) Clone() Map[K, V, Aux, A, AP] {
+func (t *Map[K, V, A]) Clone() Map[K, V, A] {
 	if t.root != nil {
 		// Incrementing the reference count on the root node is sufficient to
 		// ensure that no node in the cloned tree can be mutated by an actor
@@ -87,7 +87,7 @@ func (t *Map[K, V, Aux, A, AP]) Clone() Map[K, V, Aux, A, AP] {
 }
 
 // Delete removes an item equal to the passed in item from the tree.
-func (t *Map[K, V, Aux, A, AP]) Delete(k K) (removedK K, v V, found bool) {
+func (t *Map[K, V, A]) Delete(k K) (removedK K, v V, found bool) {
 	if t.root == nil || t.root.count == 0 {
 		return removedK, v, false
 	}
@@ -108,7 +108,7 @@ func (t *Map[K, V, Aux, A, AP]) Delete(k K) (removedK K, v V, found bool) {
 
 // Upsert adds the given item to the tree. If an item in the tree already equals
 // the given one, it is replaced with the new item.
-func (t *Map[K, V, Aux, A, AP]) Upsert(item K, value V) (replacedK K, replacedV V, replaced bool) {
+func (t *Map[K, V, A]) Upsert(item K, value V) (replacedK K, replacedV V, replaced bool) {
 	if t.root == nil {
 		t.root = t.cfg.np.getLeafNode()
 	} else if t.root.count >= MaxEntries {
@@ -134,14 +134,14 @@ func (t *Map[K, V, Aux, A, AP]) Upsert(item K, value V) (replacedK K, replacedV 
 // MakeIter returns a new Iterator object. It is not safe to continue using an
 // Iterator after modifications are made to the tree. If modifications are made,
 // create a new Iterator.
-func (t *Map[K, V, Aux, A, AP]) Iterator() Iterator[K, V, Aux, A, AP] {
-	it := Iterator[K, V, Aux, A, AP]{r: t}
+func (t *Map[K, V, A]) Iterator() Iterator[K, V, A] {
+	it := Iterator[K, V, A]{r: t}
 	it.Reset()
 	return it
 }
 
 // Height returns the height of the tree.
-func (t *Map[K, V, Aux, A, AP]) Height() int {
+func (t *Map[K, V, A]) Height() int {
 	if t.root == nil {
 		return 0
 	}
@@ -155,12 +155,12 @@ func (t *Map[K, V, Aux, A, AP]) Height() int {
 }
 
 // Len returns the number of items currently in the tree.
-func (t *Map[K, V, Aux, A, AP]) Len() int {
+func (t *Map[K, V, A]) Len() int {
 	return t.length
 }
 
 // Get returns the value associated with the requested key, if it exists.
-func (t *Map[K, V, Aux, A, AP]) Get(k K) (v V, ok bool) {
+func (t *Map[K, V, A]) Get(k K) (v V, ok bool) {
 	it := t.Iterator()
 	it.SeekGE(k)
 	if it.Valid() && it.Compare(it.Cur(), k) == 0 {
@@ -171,7 +171,7 @@ func (t *Map[K, V, Aux, A, AP]) Get(k K) (v V, ok bool) {
 
 // String returns a string description of the tree. The format is
 // similar to the https://en.wikipedia.org/wiki/Newick_format.
-func (t *Map[K, V, Aux, A, AP]) String() string {
+func (t *Map[K, V, A]) String() string {
 	if t.length == 0 {
 		return ";"
 	}

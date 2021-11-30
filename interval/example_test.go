@@ -25,10 +25,10 @@ import (
 type pair[T constraints.Ordered] [2]T
 
 func (p pair[T]) compare(o pair[T]) int {
-	if c := ordered.Compare(p[0], o[0]); c != 0 {
+	if c := ordered.Compare(p.first(), o.first()); c != 0 {
 		return c
 	}
-	return ordered.Compare(p[1], o[1])
+	return ordered.Compare(p.second(), o.second())
 }
 
 func (p pair[T]) first() T  { return p[0] }

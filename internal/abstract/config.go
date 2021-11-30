@@ -17,28 +17,31 @@ package abstract
 // Config is used to configure the tree. It consists of a comparison function
 // for keys and any auxiliary data provided by the instantiator. It is provided
 // on the iterator and passed to the augmentation's Update method.
-type Config[K, Aux any] struct {
+type Config[K, A any] struct {
 
-	// Config is the configuration provided by the instantiator of the
-	// tree.
-	Aux Aux
+	// Updater is used to update the augmentations to the tree.
+	Updater Updater[K, A]
 
 	cmp func(K, K) int
+}
+
+type Updater[K, A any] interface {
+	Update(Node[K, A], UpdateMeta[K, A]) (changed bool)
 }
 
 // Compare compares two values using the same comparison function as the Map.
 func (c *Config[K, Aux]) Compare(a, b K) int { return c.cmp(a, b) }
 
-type config[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
-	Config[K, Aux]
-	np *nodePool[K, V, Aux, A, AP]
+type config[K, V, A any] struct {
+	Config[K, A]
+	np *nodePool[K, V, A]
 }
 
-func makeConfig[K, V, Aux, A any, AP Aug[K, Aux, A]](
-	aux Aux, cmp func(K, K) int,
-) (c config[K, V, Aux, A, AP]) {
-	c.Aux = aux
+func makeConfig[K, V, A any](
+	cmp func(K, K) int, up Updater[K, A],
+) (c config[K, V, A]) {
+	c.Updater = up
 	c.cmp = cmp
-	c.np = getNodePool[K, V, Aux, A, AP]()
+	c.np = getNodePool[K, V, A]()
 	return c
 }

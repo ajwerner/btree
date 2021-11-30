@@ -23,13 +23,13 @@ import (
 // Map is a ordered map from K to V which additionally offers the methods
 // of a order-statistic tree on its iterator.
 type Map[K, V any] struct {
-	abstract.Map[K, V, struct{}, aug[K], *aug[K]]
+	abstract.Map[K, V, aug]
 }
 
 // MakeMap constructs a new Map with the provided comparison function.
 func MakeMap[K, V any](cmp func(K, K) int) Map[K, V] {
 	return Map[K, V]{
-		Map: abstract.MakeMap[K, V, struct{}, aug[K]](struct{}{}, cmp),
+		Map: abstract.MakeMap[K, V, aug](cmp, &updater[K]{}),
 	}
 }
 
@@ -76,17 +76,18 @@ func (t *Set[K]) Iterator() Iterator[K, struct{}] {
 	return (*Map[K, struct{}])(t).Iterator()
 }
 
-type aug[K any] struct {
+type aug struct {
 	// children is the number of items rooted at the current subtree.
 	children int
 }
 
-// Update will update the count for the current node.
-func (a *aug[T]) Update(
-	_ *abstract.Config[T, struct{}],
-	n abstract.Node[T, *aug[T]],
-	md abstract.UpdateMeta[T, aug[T]],
+type updater[K any] struct{}
+
+func (u updater[K]) Update(
+	n abstract.Node[K, aug],
+	md abstract.UpdateMeta[K, aug],
 ) (updated bool) {
+	a := n.GetA()
 	switch md.Action {
 	case abstract.Removal, abstract.Split:
 		a.children--
@@ -123,7 +124,7 @@ func (a *aug[T]) Update(
 // iterator methods, plus it offers Rank() and SeekNth() which allow efficient
 // rank operations.
 type Iterator[K, V any] struct {
-	abstract.Iterator[K, V, struct{}, aug[K], *aug[K]]
+	abstract.Iterator[K, V, aug]
 }
 
 // Rank returns the rank of the current iterator position. If the iterator
@@ -201,7 +202,7 @@ func (it *Iterator[K, V]) SeekNth(nth int) {
 
 func lowLevel[K, V any](
 	it *Iterator[K, V],
-) *abstract.LowLevelIterator[K, V, struct{}, aug[K], *aug[K]] {
+) *abstract.LowLevelIterator[K, V, aug] {
 	return abstract.LowLevel(&it.Iterator)
 }
 

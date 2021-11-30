@@ -18,6 +18,7 @@ package abstract
 // Node represents an abstraction of a node exposed to the
 // augmentation and low-level iteration primitives.
 type Node[K, A any] interface {
+	GetA() *A
 
 	// IsLeaf returns whether this node is a leaf.
 	IsLeaf() bool
@@ -32,19 +33,7 @@ type Node[K, A any] interface {
 	// GetChild returns the augmentation of the child at the given position. It
 	// may be called on non-leaf nodes with values in [0, Count()] if Count()
 	// is greater than 0.
-	GetChild(i int16) A
-}
-
-// Aug is a data structure which augments a node of the tree. It is updated
-// when the structure or contents of the subtree rooted at the current node
-// changes.
-type Aug[K, Aux, A any] interface {
-	*A
-
-	// Update is used to update the state of the node augmentation in response
-	// to a mutation to the tree. See Action and UpdateMeta for the semantics.
-	// The method must return true if the augmentation's value changed.
-	Update(*Config[K, Aux], Node[K, *A], UpdateMeta[K, A]) (changed bool)
+	GetChild(i int16) *A
 }
 
 // Action is used to classify the type of Update in order to permit various

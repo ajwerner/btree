@@ -18,13 +18,13 @@ import "github.com/ajwerner/btree/internal/abstract"
 
 // Map is a ordered map from K to V.
 type Map[K, V any] struct {
-	abstract.Map[K, V, struct{}, aug[K], *aug[K]]
+	abstract.Map[K, V, struct{}]
 }
 
 // MakeMap constructs a new Map with the provided comparison function.
 func MakeMap[K, V any](cmp func(K, K) int) Map[K, V] {
 	return Map[K, V]{
-		Map: abstract.MakeMap[K, V, struct{}, aug[K]](struct{}{}, cmp),
+		Map: abstract.MakeMap[K, V, struct{}](cmp, nil),
 	}
 }
 
@@ -58,14 +58,4 @@ func (t *Set[T]) Upsert(item T) (replaced T, overwrote bool) {
 func (t *Set[K]) Delete(item K) (removed bool) {
 	_, _, removed = t.Map.Delete(item)
 	return removed
-}
-
-type aug[K any] struct{}
-
-func (a *aug[T]) Update(
-	*abstract.Config[T, struct{}],
-	abstract.Node[T, *aug[T]],
-	abstract.UpdateMeta[T, aug[T]],
-) bool {
-	return false
 }

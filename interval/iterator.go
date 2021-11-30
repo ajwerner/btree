@@ -22,7 +22,7 @@ import (
 )
 
 type Iterator[I, K, V any] struct {
-	abstract.Iterator[I, V, config[I, K], aug[I, K], *aug[I, K]]
+	abstract.Iterator[I, V, aug[K]]
 
 	o overlapScan[I, K]
 }
@@ -75,13 +75,13 @@ type overlapScan[I, K any] struct {
 	bounds I
 
 	// The "soft" lower-bound constraint.
-	constrMinN       abstract.Node[I, *aug[I, K]]
+	constrMinN       abstract.Node[I, aug[K]]
 	constrMinPos     int16
 	constrMinReached bool
 	set              bool
 
 	// The "hard" upper-bound constraint.
-	constrMaxN   abstract.Node[I, *aug[I, K]]
+	constrMaxN   abstract.Node[I, aug[K]]
 	constrMaxPos int16
 }
 
@@ -110,8 +110,8 @@ func (i *Iterator[I, K, V]) FirstOverlap(bounds I) {
 
 func lowLevel[I, K, V any](
 	it *Iterator[I, K, V],
-) *abstract.LowLevelIterator[I, V, config[I, K], aug[I, K], *aug[I, K]] {
-	return abstract.LowLevel[I, V, config[I, K], aug[I, K], *aug[I, K]](&it.Iterator)
+) *abstract.LowLevelIterator[I, V, aug[K]] {
+	return abstract.LowLevel(&it.Iterator)
 }
 
 func (i *Iterator[I, K, V]) Reset() {
@@ -136,12 +136,12 @@ func (i *Iterator[I, K, V]) NextOverlap() {
 
 func (i *Iterator[I, K, V]) constrainMinSearchBounds() {
 	ll := lowLevel(i)
-	cfg := ll.Config().Aux
+	cfg := ll.Config().Updater.(*updater[I, K])
 	cmp := cfg.cmp
 	n := ll.Node()
-	k := cfg.getKey(i.o.bounds)
+	k := cfg.key(i.o.bounds)
 	j := sort.Search(int(ll.Count()), func(j int) bool {
-		return cmp(k, cfg.getKey(n.GetKey(int16(j)))) <= 0
+		return cmp(k, cfg.key(n.GetKey(int16(j)))) <= 0
 	})
 	i.o.constrMinN = n
 	i.o.constrMinPos = int16(j)
@@ -149,12 +149,12 @@ func (i *Iterator[I, K, V]) constrainMinSearchBounds() {
 
 func (i *Iterator[I, K, V]) constrainMaxSearchBounds() {
 	ll := lowLevel(i)
-	cfg := &ll.Config().Aux
+	cfg := ll.Config().Updater.(*updater[I, K])
 	cmp := cfg.cmp
-	up := upperBound(cfg, i.o.bounds)
+	up := cfg.upperBound(i.o.bounds)
 	n := ll.Node()
 	j := sort.Search(int(n.Count()), func(j int) bool {
-		return !up.contains(cmp, cfg.getKey(n.GetKey(int16(j))))
+		return !up.contains(cmp, cfg.key(n.GetKey(int16(j))))
 	})
 	i.o.constrMaxN = n
 	i.o.constrMaxPos = int16(j)
@@ -162,7 +162,7 @@ func (i *Iterator[I, K, V]) constrainMaxSearchBounds() {
 
 func (i *Iterator[I, K, V]) findNextOverlap() {
 	ll := lowLevel(i)
-	cfg := &ll.Config().Aux
+	cfg := ll.Config().Updater.(*updater[I, K])
 	cmp := cfg.cmp
 	for {
 		if ll.Pos() > ll.Node().Count() {
@@ -170,7 +170,7 @@ func (i *Iterator[I, K, V]) findNextOverlap() {
 			ll.Ascend()
 		} else if !ll.Node().IsLeaf() {
 			// Iterate down tree.
-			if i.o.constrMinReached || ll.Child().contains(cmp, cfg.getKey(i.o.bounds)) {
+			if i.o.constrMinReached || ll.Child().contains(cmp, cfg.key(i.o.bounds)) {
 				par := ll.Node()
 				pos := ll.Pos()
 				ll.Descend()
@@ -206,7 +206,7 @@ func (i *Iterator[I, K, V]) findNextOverlap() {
 				// span's start key.
 				return
 			}
-			if upperBound(cfg, i.Cur()).contains(cmp, cfg.getKey(i.o.bounds)) {
+			if cfg.upperBound(i.Cur()).contains(cmp, cfg.key(i.o.bounds)) {
 				return
 			}
 		}

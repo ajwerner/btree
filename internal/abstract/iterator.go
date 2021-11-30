@@ -16,23 +16,23 @@
 package abstract
 
 // Iterator is responsible for search and traversal within a AugBTree.
-type Iterator[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
-	r *Map[K, V, Aux, A, AP]
-	iterFrame[K, V, Aux, A, AP]
-	s iterStack[K, V, Aux, A, AP]
+type Iterator[K, V, A any] struct {
+	r *Map[K, V, A]
+	iterFrame[K, V, A]
+	s iterStack[K, V, A]
 }
 
-func (i *Iterator[K, V, Aux, A, AP]) lowLevel() *LowLevelIterator[K, V, Aux, A, AP] {
-	return (*LowLevelIterator[K, V, Aux, A, AP])(i)
+func (i *Iterator[K, V, A]) lowLevel() *LowLevelIterator[K, V, A] {
+	return (*LowLevelIterator[K, V, A])(i)
 }
 
 // Compare compares two keys using the same comparison function as the map.
-func (i *Iterator[K, V, Aux, A, AP]) Compare(a, b K) int {
+func (i *Iterator[K, V, A]) Compare(a, b K) int {
 	return i.r.cfg.cmp(a, b)
 }
 
 // Reset marks the iterator as invalid and clears any state.
-func (i *Iterator[K, V, Aux, A, AP]) Reset() {
+func (i *Iterator[K, V, A]) Reset() {
 	i.node = i.r.root
 	i.pos = -1
 	i.s.reset()
@@ -40,7 +40,7 @@ func (i *Iterator[K, V, Aux, A, AP]) Reset() {
 
 // SeekGE seeks to the first key greater-than or equal to the provided
 // key.
-func (i *Iterator[K, V, Aux, A, AP]) SeekGE(key K) {
+func (i *Iterator[K, V, A]) SeekGE(key K) {
 	i.Reset()
 	if i.node == nil {
 		return
@@ -63,7 +63,7 @@ func (i *Iterator[K, V, Aux, A, AP]) SeekGE(key K) {
 }
 
 // SeekLT seeks to the first key less-than the provided key.
-func (i *Iterator[K, V, Aux, A, AP]) SeekLT(key K) {
+func (i *Iterator[K, V, A]) SeekLT(key K) {
 	i.Reset()
 	if i.node == nil {
 		return
@@ -81,7 +81,7 @@ func (i *Iterator[K, V, Aux, A, AP]) SeekLT(key K) {
 }
 
 // First seeks to the first key in the AugBTree.
-func (i *Iterator[K, V, Aux, A, AP]) First() {
+func (i *Iterator[K, V, A]) First() {
 	i.Reset()
 	i.pos = 0
 	if i.node == nil {
@@ -95,7 +95,7 @@ func (i *Iterator[K, V, Aux, A, AP]) First() {
 }
 
 // Last seeks to the last key in the AugBTree.
-func (i *Iterator[K, V, Aux, A, AP]) Last() {
+func (i *Iterator[K, V, A]) Last() {
 	i.Reset()
 	if i.node == nil {
 		return
@@ -110,7 +110,7 @@ func (i *Iterator[K, V, Aux, A, AP]) Last() {
 
 // Next positions the Iterator to the key immediately following
 // its current position.
-func (i *Iterator[K, V, Aux, A, AP]) Next() {
+func (i *Iterator[K, V, A]) Next() {
 	if i.node == nil {
 		return
 	}
@@ -136,7 +136,7 @@ func (i *Iterator[K, V, Aux, A, AP]) Next() {
 
 // Prev positions the Iterator to the key immediately preceding
 // its current position.
-func (i *Iterator[K, V, Aux, A, AP]) Prev() {
+func (i *Iterator[K, V, A]) Prev() {
 	if i.node == nil {
 		return
 	}
@@ -162,18 +162,18 @@ func (i *Iterator[K, V, Aux, A, AP]) Prev() {
 }
 
 // Valid returns whether the Iterator is positioned at a valid position.
-func (i *Iterator[K, V, Aux, A, AP]) Valid() bool {
+func (i *Iterator[K, V, A]) Valid() bool {
 	return i.node != nil && i.pos >= 0 && i.pos < i.count
 }
 
 // Cur returns the key at the Iterator's current position. It is illegal
 // to call Key if the Iterator is not valid.
-func (i *Iterator[K, V, Aux, A, AP]) Cur() K {
+func (i *Iterator[K, V, A]) Cur() K {
 	return i.keys[i.pos]
 }
 
 // Value returns the value at the Iterator's current position. It is illegal
 // to call Value if the Iterator is not valid.
-func (i *Iterator[K, V, Aux, A, AP]) Value() V {
+func (i *Iterator[K, V, A]) Value() V {
 	return i.values[i.pos]
 }
