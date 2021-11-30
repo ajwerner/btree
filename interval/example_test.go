@@ -12,32 +12,39 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package btree
+package interval_test
 
 import (
-	"testing"
+	"fmt"
 
 	"github.com/ajwerner/btree/internal/ordered"
+	"github.com/ajwerner/btree/interval"
 )
 
-func TestBTree(t *testing.T) {
-	assertEq := func(t *testing.T, exp, got int) {
-		t.Helper()
-		if exp != got {
-			t.Fatalf("expected %d, got %d", exp, got)
-		}
+func ExampleBlog() {
+	type pair [2]int
+	m := interval.MakeSet(
+		ordered.Compare[int],
+		func(a, b pair) int {
+			if c := ordered.Compare(a[0], b[0]); c != 0 {
+				return c
+			}
+			return ordered.Compare(a[0], b[0])
+		},
+		func(i pair) int { return i[0] },
+		func(i pair) int { return i[1] },
+	)
+	for _, p := range []pair{
+		{1, 2}, {2, 3}, {1, 5}, {0, 6}, {2, 7},
+	} {
+		m.Upsert(p)
 	}
-
-	tree := MakeSet(ordered.Compare[int])
-	tree.Upsert(2)
-	tree.Upsert(12)
-	tree.Upsert(1)
-
-	it := tree.Iterator()
-	it.First()
-	expected := []int{1, 2, 12}
-	for _, exp := range expected {
-		assertEq(t, exp, it.Cur())
-		it.Next()
+	it := m.Iterator()
+	for it.FirstOverlap(pair{4, 5}); it.Valid(); it.NextOverlap() {
+		fmt.Println(it.Cur())
 	}
+	// Output:
+	// [0 6]
+	// [1 5]
+	// [2 7]
 }

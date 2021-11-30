@@ -163,7 +163,7 @@ func (t *Map[K, V, Aux, A, AP]) Len() int {
 func (t *Map[K, V, Aux, A, AP]) Get(k K) (v V, ok bool) {
 	it := t.Iterator()
 	it.SeekGE(k)
-	if it.Valid() && it.Compare(it.Key(), k) == 0 {
+	if it.Valid() && it.Compare(it.Cur(), k) == 0 {
 		return it.Value(), true
 	}
 	return v, false

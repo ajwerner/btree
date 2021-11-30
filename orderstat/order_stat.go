@@ -52,7 +52,7 @@ func MakeSet[T any](cmp func(T, T) int) Set[T] {
 	return (Set[T])(MakeMap[T, struct{}](cmp))
 }
 
-// Clone clones the Map, lazily. It does so in constant time.
+// Clone clones the Set, lazily. It does so in constant time.
 func (t *Set[T]) Clone() Set[T] {
 	return (Set[T])((*Map[T, struct{}])(t).Clone())
 }

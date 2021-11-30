@@ -15,6 +15,7 @@
 package orderstat
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -23,7 +24,7 @@ import (
 )
 
 func TestOrderStatTree(t *testing.T) {
-	tree := NewMap[int, int](ordered.Compare[int])
+	tree := MakeMap[int, int](ordered.Compare[int])
 	tree.Upsert(2, 1)
 	tree.Upsert(3, 2)
 	tree.Upsert(5, 4)
@@ -31,17 +32,17 @@ func TestOrderStatTree(t *testing.T) {
 	iter := tree.Iterator()
 	iter.First()
 	for i, exp := range []int{2, 3, 4, 5} {
-		require.Equal(t, exp, iter.Key())
+		require.Equal(t, exp, iter.Cur())
 		require.Equal(t, i, iter.Rank())
 		iter.Next()
 	}
 	iter.SeekNth(2)
-	require.Equal(t, 4, iter.Key())
+	require.Equal(t, 4, iter.Cur())
 }
 
 func TestOrderStatNth(t *testing.T) {
 	t.Parallel()
-	tree := NewSet(ordered.Compare[int])
+	tree := MakeSet(ordered.Compare[int])
 	const maxN = 1000
 	N := rand.Intn(maxN)
 	items := make([]int, 0, N)
@@ -71,10 +72,10 @@ func TestOrderStatNth(t *testing.T) {
 	iter := tree.Iterator()
 	for _, idx := range perm {
 		iter.SeekNth(idx)
-		require.Equal(t, items[idx], iter.Key())
+		require.Equal(t, items[idx], iter.Cur())
 		for i := idx + 1; i < N; i++ {
 			iter.Next()
-			require.Equal(t, items[i], iter.Key())
+			require.Equal(t, items[i], iter.Cur())
 		}
 		require.True(t, iter.Valid())
 		iter.Next()
@@ -85,4 +86,19 @@ func TestOrderStatNth(t *testing.T) {
 	clone.Reset()
 	require.Equal(t, tree.Len(), len(perm))
 
+}
+
+func ExampleBlog() {
+	s := MakeSet(ordered.Compare[int])
+	for _, i := range rand.Perm(100) {
+		s.Upsert(i)
+	}
+	fmt.Println(s.Len())
+	it := s.Iterator()
+	it.SeekNth(90)
+	fmt.Println(it.Cur())
+
+	// Output:
+	// 100
+	// 90
 }

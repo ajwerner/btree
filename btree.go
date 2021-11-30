@@ -28,12 +28,22 @@ func MakeMap[K, V any](cmp func(K, K) int) Map[K, V] {
 	}
 }
 
+// Clone clones the Map, lazily. It does so in constant time.
+func (m *Map[K, V]) Clone() Map[K, V] {
+	return Map[K, V]{Map: m.Map.Clone()}
+}
+
 // Set is an ordered set of items of type T.
 type Set[T any] Map[T, struct{}]
 
 // MakeSet constructs a new Set with the provided comparison function.
 func MakeSet[T any](cmp func(T, T) int) Set[T] {
 	return (Set[T])(MakeMap[T, struct{}](cmp))
+}
+
+// Clone clones the Set, lazily. It does so in constant time.
+func (t *Set[T]) Clone() Set[T] {
+	return (Set[T])((*Map[T, struct{}])(t).Clone())
 }
 
 // Upsert inserts or updates the provided item. It returns

@@ -47,7 +47,7 @@ func (a *aug[I, K]) Update(
 				up = child.keyBound
 			}
 		}
-		if a.keyBound.compare(cmp, up) == 0 {
+		if a.compare(cmp, up) == 0 {
 			a.keyBound = findUpperBound(&cfg.Aux, n)
 			return a.compare(cmp, up) != 0
 		}
@@ -59,7 +59,6 @@ func (a *aug[I, K]) Update(
 		}
 		fallthrough
 	case abstract.Default:
-		// Fin
 		prev := a.keyBound
 		a.keyBound = findUpperBound(&cfg.Aux, n)
 		return a.compare(cmp, prev) != 0
@@ -82,7 +81,7 @@ func upperBound[I, K any](cfg *config[I, K], interval I) keyBound[K] {
 	// TODO(ajwerner): Panic on insert if the interval invariant is not upheld.
 	// TODO(ajwerner): Consider a different API for single-point intervals like
 	// a boolean method to indicate that there is no end key.
-	if cfg.cmp(k, end) < 0 {
+	if isZero(cfg.cmp, end) {
 		return keyBound[K]{k: k, inclusive: true}
 	}
 	return keyBound[K]{k: end}

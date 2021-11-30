@@ -166,9 +166,9 @@ func (i *Iterator[K, V, Aux, A, AP]) Valid() bool {
 	return i.node != nil && i.pos >= 0 && i.pos < i.count
 }
 
-// Key returns the key at the Iterator's current position. It is illegal
+// Cur returns the key at the Iterator's current position. It is illegal
 // to call Key if the Iterator is not valid.
-func (i *Iterator[K, V, Aux, A, AP]) Key() K {
+func (i *Iterator[K, V, Aux, A, AP]) Cur() K {
 	return i.keys[i.pos]
 }
 

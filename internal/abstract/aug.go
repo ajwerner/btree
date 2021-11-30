@@ -36,7 +36,7 @@ type Node[K, A any] interface {
 }
 
 // Aug is a data structure which augments a node of the tree. It is updated
-// when the structure or contents of the substract rooted at the current node
+// when the structure or contents of the subtree rooted at the current node
 // changes.
 type Aug[K, Aux, A any] interface {
 	*A

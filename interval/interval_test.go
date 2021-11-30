@@ -21,6 +21,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Interval represents an interval with bounds from [Key(), End()) where
+// Key() is inclusive and End() is exclusive. If Key() == End(), then the
+// Inteval represents a point that only includes that value. Intervals with
+// Key() which is larger than End() are invalid and may result in panics
+// upon insertion.
+type Interval[K any] interface {
+	Key() K
+	End() K
+}
+
 type IntervalWithID[K, ID any] interface {
 	Interval[K]
 	ID() ID
@@ -59,7 +69,7 @@ func TestIntervalTree(t *testing.T) {
 			t.Fatalf("expected %d, got %d", exp, got)
 		}
 	}
-	tree := NewMap[IntInterval, int, struct{}](
+	tree := MakeMap[IntInterval, int, struct{}](
 		ordered.Compare[int],
 		IntervalCompare[IntInterval](ordered.Compare[int]),
 		IntInterval.Key,
@@ -72,7 +82,7 @@ func TestIntervalTree(t *testing.T) {
 	iter := tree.Iterator()
 	iter.First()
 	for _, exp := range items {
-		assertEq(t, exp, iter.Key())
+		assertEq(t, exp, iter.Cur())
 		iter.Next()
 	}
 
@@ -91,7 +101,7 @@ func TestIntervalTree(t *testing.T) {
 	} {
 		var res []IntInterval
 		for iter.FirstOverlap(tc.q); iter.Valid(); iter.NextOverlap() {
-			res = append(res, iter.Key())
+			res = append(res, iter.Cur())
 		}
 		require.Equal(t, tc.res, res)
 	}

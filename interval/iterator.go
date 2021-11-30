@@ -135,7 +135,6 @@ func (i *Iterator[I, K, V]) NextOverlap() {
 }
 
 func (i *Iterator[I, K, V]) constrainMinSearchBounds() {
-
 	ll := lowLevel(i)
 	cfg := ll.Config().Aux
 	cmp := cfg.cmp
@@ -207,7 +206,7 @@ func (i *Iterator[I, K, V]) findNextOverlap() {
 				// span's start key.
 				return
 			}
-			if upperBound(cfg, i.Key()).contains(cmp, cfg.getKey(i.o.bounds)) {
+			if upperBound(cfg, i.Cur()).contains(cmp, cfg.getKey(i.o.bounds)) {
 				return
 			}
 		}

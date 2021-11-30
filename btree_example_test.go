@@ -15,7 +15,7 @@ func ExampleMap() {
 	fmt.Println(m.Get("baz"))
 	it := m.Iterator()
 	for it.First(); it.Valid(); it.Next() {
-		fmt.Println(it.Key(), it.Value())
+		fmt.Println(it.Cur(), it.Value())
 	}
 
 	// Output:
