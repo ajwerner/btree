@@ -21,9 +21,9 @@ type Map[K, V any] struct {
 	abstract.Map[K, V, struct{}, aug[K], *aug[K]]
 }
 
-// NewMap constructs a new Map with the provided comparison function.
-func NewMap[K, V any](cmp func(K, K) int) *Map[K, V] {
-	return &Map[K, V]{
+// MakeMap constructs a new Map with the provided comparison function.
+func MakeMap[K, V any](cmp func(K, K) int) Map[K, V] {
+	return Map[K, V]{
 		Map: abstract.MakeMap[K, V, struct{}, aug[K]](struct{}{}, cmp),
 	}
 }
@@ -31,9 +31,9 @@ func NewMap[K, V any](cmp func(K, K) int) *Map[K, V] {
 // Set is an ordered set of items of type T.
 type Set[T any] Map[T, struct{}]
 
-// NewSet constructs a new Set with the provided comparison function.
-func NewSet[T any](cmp func(T, T) int) *Set[T] {
-	return (*Set[T])(NewMap[T, struct{}](cmp))
+// MakeSet constructs a new Set with the provided comparison function.
+func MakeSet[T any](cmp func(T, T) int) Set[T] {
+	return (Set[T])(MakeMap[T, struct{}](cmp))
 }
 
 // Upsert inserts or updates the provided item. It returns

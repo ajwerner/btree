@@ -8,7 +8,7 @@ import (
 )
 
 func ExampleMap() {
-	m := btree.NewMap[string, int](strings.Compare)
+	m := btree.MakeMap[string, int](strings.Compare)
 	m.Upsert("foo", 1)
 	m.Upsert("bar", 2)
 	fmt.Println(m.Get("foo"))

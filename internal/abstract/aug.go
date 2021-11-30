@@ -47,21 +47,6 @@ type Aug[K, Aux, A any] interface {
 	Update(*Config[K, Aux], Node[K, *A], UpdateMeta[K, A]) (changed bool)
 }
 
-// Config is used to configure the tree. It consists of a comparison function
-// for keys and any auxiliary data provided by the instantiator. It is provided
-// on the iterator and passed to the augmentation's Update method.
-type Config[K, Aux any] struct {
-
-	// Config is the configuration provided by the instantiator of the
-	// tree.
-	Aux Aux
-
-	cmp func(K, K) int
-}
-
-// Compare compares two values using the same comparison function as the Map.
-func (c *Config[K, Aux]) Compare(a, b K) int { return c.cmp(a, b) }
-
 // Action is used to classify the type of Update in order to permit various
 // optimizations when updated the augmented state.
 type Action int

@@ -26,7 +26,7 @@ func (a *aug[I, K]) Update(
 	n abstract.Node[I, *aug[I, K]],
 	md abstract.UpdateMeta[I, aug[I, K]],
 ) (updated bool) {
-	cmp := cfg.Aux.compareK
+	cmp := cfg.Aux.cmp
 	switch md.Action {
 	case abstract.Insertion:
 		up := upperBound(&cfg.Aux, md.RelevantKey)
@@ -47,7 +47,7 @@ func (a *aug[I, K]) Update(
 				up = child.keyBound
 			}
 		}
-		if a.keyBound.compare(cmp, up) != 0 {
+		if a.keyBound.compare(cmp, up) == 0 {
 			a.keyBound = findUpperBound(&cfg.Aux, n)
 			return a.compare(cmp, up) != 0
 		}
@@ -82,7 +82,7 @@ func upperBound[I, K any](cfg *config[I, K], interval I) keyBound[K] {
 	// TODO(ajwerner): Panic on insert if the interval invariant is not upheld.
 	// TODO(ajwerner): Consider a different API for single-point intervals like
 	// a boolean method to indicate that there is no end key.
-	if isZero(cfg.compareK, end) {
+	if cfg.cmp(k, end) < 0 {
 		return keyBound[K]{k: k, inclusive: true}
 	}
 	return keyBound[K]{k: end}
@@ -98,7 +98,7 @@ func findUpperBound[I, K any](cfg *config[I, K], n abstract.Node[I, *aug[I, K]])
 	var setMax bool
 	for i, cnt := int16(0), n.Count(); i < cnt; i++ {
 		up := upperBound(cfg, n.GetKey(i))
-		if !setMax || max.compare(cfg.compareK, up) < 0 {
+		if !setMax || max.compare(cfg.cmp, up) < 0 {
 			setMax = true
 			max = up
 		}
@@ -106,7 +106,7 @@ func findUpperBound[I, K any](cfg *config[I, K], n abstract.Node[I, *aug[I, K]])
 	if !n.IsLeaf() {
 		for i, cnt := int16(0), n.Count(); i <= cnt; i++ {
 			up := n.GetChild(i).keyBound
-			if max.compare(cfg.compareK, up) < 0 {
+			if max.compare(cfg.cmp, up) < 0 {
 				max = up
 			}
 		}

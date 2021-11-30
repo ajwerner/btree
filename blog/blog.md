@@ -19,8 +19,8 @@ Nathan’s [addition of the first interval btree to cockroach and the power of
 copy-on-write data structures](https://github.com/cockroachdb/cockroach/pull/31997)
 is worthy of its own blog post for another day. It’s Nathan’s [hand-
 specialization of that data structure](https://github.com/cockroachdb/cockroach/pull/32165) 
-that provided the basis for the generalization I’ll be presenting here.
-The reason for this specialization was as much for the performance wins of
+that provided the basis (and tests) for the generalization I’ll be presenting
+here. The reason for this specialization was as much for the performance wins of
 avoiding excessive allocations, pointer chasing, and cost of type assertions
 when using interface boxing.
 
@@ -48,7 +48,7 @@ The root of the module is a vanilla sorted set and map library. Here's an
 example:
 
 ```go
-m := btree.NewMap[string, int](strings.Compare)
+m := btree.MakeMap[string, int](strings.Compare)
 m.Upsert("foo", 1)
 m.Upsert("bar", 2)
 fmt.Println(m.Get("foo"))
@@ -74,3 +74,5 @@ and is amenable to all manner of functions to bring back similar ergonomics.
 We'll break down the iterator and how to use it when I talk about gripes. For
 now, I want to look at the type signature of the vanilla btree and then its
 extensions.
+
+Alright, so what is this 

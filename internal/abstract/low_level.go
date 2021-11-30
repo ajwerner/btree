@@ -15,7 +15,7 @@ func LowLevel[K, V, Aux, A any, AP Aug[K, Aux, A]](
 
 // Config returns the Map's config.
 func (i *LowLevelIterator[K, V, Aux, A, AP]) Config() *Config[K, Aux] {
-	return &i.r.cfg
+	return &i.r.cfg.Config
 }
 
 // IncrementPos increments the iterator's position within the current node.
@@ -30,7 +30,7 @@ func (i *LowLevelIterator[K, V, Aux, A, AP]) SetPos(pos int16) {
 
 // IsLeaf returns true if the current node is a leaf.
 func (i *LowLevelIterator[K, V, Aux, A, AP]) IsLeaf() bool {
-	return i.leaf
+	return i.node.IsLeaf()
 }
 
 // Node returns the current node.

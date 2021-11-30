@@ -52,7 +52,7 @@ func (i *Iterator[K, V, Aux, A, AP]) SeekGE(key K) {
 		if found {
 			return
 		}
-		if i.leaf {
+		if i.IsLeaf() {
 			if i.pos == i.count {
 				i.Next()
 			}
@@ -72,7 +72,7 @@ func (i *Iterator[K, V, Aux, A, AP]) SeekLT(key K) {
 	for {
 		pos, found := i.find(i.r.cfg.cmp, key)
 		i.pos = int16(pos)
-		if found || i.leaf {
+		if found || i.IsLeaf() {
 			i.Prev()
 			return
 		}
@@ -88,7 +88,7 @@ func (i *Iterator[K, V, Aux, A, AP]) First() {
 		return
 	}
 	ll := i.lowLevel()
-	for !i.leaf {
+	for !i.IsLeaf() {
 		ll.Descend()
 	}
 	i.pos = 0
@@ -101,7 +101,7 @@ func (i *Iterator[K, V, Aux, A, AP]) Last() {
 		return
 	}
 	ll := i.lowLevel()
-	for !i.leaf {
+	for !i.IsLeaf() {
 		i.pos = i.count
 		ll.Descend()
 	}
@@ -115,7 +115,7 @@ func (i *Iterator[K, V, Aux, A, AP]) Next() {
 		return
 	}
 	ll := i.lowLevel()
-	if i.leaf {
+	if i.IsLeaf() {
 		i.pos++
 		if i.pos < i.count {
 			return
@@ -127,7 +127,7 @@ func (i *Iterator[K, V, Aux, A, AP]) Next() {
 	}
 	i.pos++
 	ll.Descend()
-	for !i.leaf {
+	for !i.IsLeaf() {
 		i.pos = 0
 		ll.Descend()
 	}
@@ -141,7 +141,7 @@ func (i *Iterator[K, V, Aux, A, AP]) Prev() {
 		return
 	}
 	ll := i.lowLevel()
-	if i.leaf {
+	if i.IsLeaf() {
 		i.pos--
 		if i.pos >= 0 {
 			return
@@ -154,7 +154,7 @@ func (i *Iterator[K, V, Aux, A, AP]) Prev() {
 	}
 
 	ll.Descend()
-	for !i.leaf {
+	for !i.IsLeaf() {
 		i.pos = i.count
 		ll.Descend()
 	}

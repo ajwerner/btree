@@ -23,7 +23,7 @@ import (
 // compile-time constant.
 
 const (
-	Degree     = 8
+	Degree     = 16
 	MaxEntries = 2*Degree - 1
 	MinEntries = Degree - 1
 )
@@ -42,16 +42,13 @@ const (
 type Map[K, V, Aux, A any, AP Aug[K, Aux, A]] struct {
 	root   *node[K, V, Aux, A, AP]
 	length int
-	cfg    Config[K, Aux]
+	cfg    config[K, V, Aux, A, AP]
 }
 
 // MakeMap constructs a new Map.
 func MakeMap[K, V, Aux, A any, AP Aug[K, Aux, A]](aux Aux, cmp func(K, K) int) Map[K, V, Aux, A, AP] {
 	return Map[K, V, Aux, A, AP]{
-		cfg: Config[K, Aux]{
-			cmp:    cmp,
-			Aux: aux,
-		},
+		cfg: makeConfig[K, V, Aux, A, AP](aux, cmp),
 	}
 }
 
@@ -61,7 +58,7 @@ func MakeMap[K, V, Aux, A any, AP Aug[K, Aux, A]](aux Aux, cmp func(K, K) int) M
 // but it will prevent AugBTree nodes from being efficiently re-used.
 func (t *Map[K, V, Aux, A, AP]) Reset() {
 	if t.root != nil {
-		t.root.decRef(true /* recursive */)
+		t.root.decRef(t.cfg.np, true /* recursive */)
 		t.root = nil
 	}
 	t.length = 0
@@ -94,17 +91,17 @@ func (t *Map[K, V, Aux, A, AP]) Delete(k K) (removedK K, v V, found bool) {
 	if t.root == nil || t.root.count == 0 {
 		return removedK, v, false
 	}
-	if removedK, v, found, _ = mut(&t.root).remove(&t.cfg, k); found {
+	if removedK, v, found, _ = mut(t.cfg.np, &t.root).remove(&t.cfg, k); found {
 		t.length--
 	}
 	if t.root.count == 0 {
 		old := t.root
-		if t.root.leaf {
+		if t.root.IsLeaf() {
 			t.root = nil
 		} else {
 			t.root = t.root.children[0]
 		}
-		old.decRef(false /* recursive */)
+		old.decRef(t.cfg.np, false /* recursive */)
 	}
 	return removedK, v, found
 }
@@ -113,19 +110,21 @@ func (t *Map[K, V, Aux, A, AP]) Delete(k K) (removedK K, v V, found bool) {
 // the given one, it is replaced with the new item.
 func (t *Map[K, V, Aux, A, AP]) Upsert(item K, value V) (replacedK K, replacedV V, replaced bool) {
 	if t.root == nil {
-		t.root = newLeafNode[K, V, Aux, A, AP]()
+		t.root = t.cfg.np.getLeafNode()
 	} else if t.root.count >= MaxEntries {
-		splitLaK, splitLaV, splitNode := mut(&t.root).split(&t.cfg, MaxEntries/2)
-		newRoot := newNode[K, V, Aux, A, AP]()
+		splitLaK, splitLaV, splitNode := mut(t.cfg.np, &t.root).
+			split(&t.cfg, MaxEntries/2)
+		newRoot := t.cfg.np.getInteriorNode()
 		newRoot.count = 1
 		newRoot.keys[0] = splitLaK
 		newRoot.values[0] = splitLaV
 		newRoot.children[0] = t.root
 		newRoot.children[1] = splitNode
-		newRoot.update(&t.cfg)
+		newRoot.update(&t.cfg.Config)
 		t.root = newRoot
 	}
-	replacedK, replacedV, replaced, _ = mut(&t.root).insert(&t.cfg, item, value)
+	replacedK, replacedV, replaced, _ = mut(t.cfg.np, &t.root).
+		insert(&t.cfg, item, value)
 	if !replaced {
 		t.length++
 	}
@@ -148,7 +147,7 @@ func (t *Map[K, V, Aux, A, AP]) Height() int {
 	}
 	h := 1
 	n := t.root
-	for !n.leaf {
+	for !n.IsLeaf() {
 		n = n.children[0]
 		h++
 	}

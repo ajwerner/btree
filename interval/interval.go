@@ -28,7 +28,7 @@ type Interval[K any] interface {
 
 type config[I, K any] struct {
 	getKey, getEndKey func(I) K
-	compareK          func(K, K) int
+	cmp               func(K, K) int
 }
 
 func (m *Map[I, K, V]) Clone() Map[I, K, V] {
@@ -47,7 +47,7 @@ func NewMap[I, K, V any](cmpK Cmp[K], cmpI Cmp[I], key, endKey func(I) K) Map[I,
 	return Map[I, K, V]{
 		Map: abstract.MakeMap[I, V, config[I, K], aug[I, K]](
 			config[I, K]{
-				compareK:  cmpK,
+				cmp:       cmpK,
 				getKey:    key,
 				getEndKey: endKey,
 			},

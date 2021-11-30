@@ -138,7 +138,7 @@ func (i *Iterator[I, K, V]) constrainMinSearchBounds() {
 
 	ll := lowLevel(i)
 	cfg := ll.Config().Aux
-	cmp := cfg.compareK
+	cmp := cfg.cmp
 	n := ll.Node()
 	k := cfg.getKey(i.o.bounds)
 	j := sort.Search(int(ll.Count()), func(j int) bool {
@@ -151,7 +151,7 @@ func (i *Iterator[I, K, V]) constrainMinSearchBounds() {
 func (i *Iterator[I, K, V]) constrainMaxSearchBounds() {
 	ll := lowLevel(i)
 	cfg := &ll.Config().Aux
-	cmp := cfg.compareK
+	cmp := cfg.cmp
 	up := upperBound(cfg, i.o.bounds)
 	n := ll.Node()
 	j := sort.Search(int(n.Count()), func(j int) bool {
@@ -164,7 +164,7 @@ func (i *Iterator[I, K, V]) constrainMaxSearchBounds() {
 func (i *Iterator[I, K, V]) findNextOverlap() {
 	ll := lowLevel(i)
 	cfg := &ll.Config().Aux
-	cmp := cfg.compareK
+	cmp := cfg.cmp
 	for {
 		if ll.Pos() > ll.Node().Count() {
 			// Iterate up tree.
