@@ -4,7 +4,7 @@
 * Author: Andrew Werner 
 
 ## tl;dr
-[`github.com/ajwerner/btree`](https://github.com/ajwerner/btree/tree) provides
+[`github.com/ajwerner/btree`](https://github.com/ajwerner/btree) provides
 go1.18 generic implementations of CoW btree data structures including regular
 a regular map/set, order-statistic trees, and interval trees all backed by a
 shared generic augmented btree implementation. Given go 1.18 hasn't been
@@ -39,4 +39,38 @@ https://github.com/ajwerner/btree/tree), a library leveraging go1.18's
 parametric polymorphism to build an abstract augmented btree which offers
 rich core functionality and easy extensibility. 
 
-The post will go through a high-level 
+The post will go through a high-level overview of the library then some
+minor complaints. Another post will go through benchmarks.
+
+## The library
+
+The root of the module is a vanilla sorted set and map library. Here's an
+example:
+
+```go
+m := btree.NewMap[string, int](strings.Compare)
+m.Upsert("foo", 1)
+m.Upsert("bar", 2)
+fmt.Println(m.Get("foo"))
+fmt.Println(m.Get("baz"))
+it := m.Iterator()
+for it.First(); it.Valid(); it.Next() {
+    fmt.Println(it.Key(), it.Value())
+}
+```
+
+The above will print:
+```
+1 true
+0 false
+foo 1
+bar 2
+```
+
+Immediately, you might be thinking that that iterator is a bit strange. It's
+somewhat far afield from the usual functional `(A|De)scend*` methods you'll
+find in `llrb` and `google/btree`, but it's a pattern that's grown on me
+and is amenable to all manner of functions to bring back similar ergonomics.
+We'll break down the iterator and how to use it when I talk about gripes. For
+now, I want to look at the type signature of the vanilla btree and then its
+extensions.
