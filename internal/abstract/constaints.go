@@ -54,7 +54,7 @@ type Config[K, Aux any] struct {
 
 	// Config is the configuration provided by the instantiator of the
 	// tree.
-	Config Aux
+	Aux Aux
 
 	cmp func(K, K) int
 }

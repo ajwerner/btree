@@ -163,7 +163,7 @@ func (i *Iterator[K, V, Aux, A, AP]) Prev() {
 
 // Valid returns whether the Iterator is positioned at a valid position.
 func (i *Iterator[K, V, Aux, A, AP]) Valid() bool {
-	return i.pos >= 0 && i.pos < i.count
+	return i.node != nil && i.pos >= 0 && i.pos < i.count
 }
 
 // Key returns the key at the Iterator's current position. It is illegal

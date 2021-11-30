@@ -75,21 +75,38 @@ type aug[K any] struct {
 func (a *aug[T]) Update(
 	_ *abstract.Config[T, struct{}],
 	n abstract.Node[T, *aug[T]],
-	_ abstract.UpdateMeta[T, aug[T]],
+	md abstract.UpdateMeta[T, aug[T]],
 ) (updated bool) {
-	orig := a.children
-	var children int
-	if !n.IsLeaf() {
-		N := n.Count()
-		for i := int16(0); i <= N; i++ {
-			if child := n.GetChild(i); child != nil {
-				children += child.children
+	switch md.Action {
+	case abstract.Removal, abstract.Split:
+		a.children--
+		if md.ModifiedOther != nil {
+			a.children -= md.ModifiedOther.children
+		}
+		return true
+	case abstract.Insertion:
+		a.children++
+		if md.ModifiedOther != nil {
+			a.children += md.ModifiedOther.children
+		}
+		return true
+	case abstract.Default:
+		orig := a.children
+		var children int
+		if !n.IsLeaf() {
+			N := n.Count()
+			for i := int16(0); i <= N; i++ {
+				if child := n.GetChild(i); child != nil {
+					children += child.children
+				}
 			}
 		}
+		children += int(n.Count())
+		a.children = children
+		return a.children != orig
+	default:
+		panic(fmt.Errorf("unknown action %v", md.Action))
 	}
-	children += int(n.Count())
-	a.children = children
-	return a.children != orig
 }
 
 // Iterator allows iteration through the collection. It offers all the usual

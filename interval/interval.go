@@ -26,22 +26,33 @@ type Interval[K any] interface {
 	End() K
 }
 
-type config[K any] struct {
-	compareK func(K, K) int
+type config[I, K any] struct {
+	getKey, getEndKey func(I) K
+	compareK          func(K, K) int
+}
+
+func (m *Map[I, K, V]) Clone() Map[I, K, V] {
+	return Map[I, K, V]{Map: m.Map.Clone()}
 }
 
 // Map is a ordered map from I to V where I is an interval. Its iterator
 // provides efficient overlap queries.
-type Map[I Interval[K], V, K any] struct {
-	abstract.Map[I, V, config[K], aug[K, I], *aug[K, I]]
+type Map[I, K, V any] struct {
+	abstract.Map[I, V, config[I, K], aug[I, K], *aug[I, K]]
 }
 
 // NewMap constructs a new map with the provided comparison functions
 // for intervals and for their bounds.
-func NewMap[I Interval[K], V, K any](cmpK Cmp[K], cmpI Cmp[I]) Map[I, V, K] {
-	return Map[I, V, K]{
-		Map: abstract.MakeMap[I, V, config[K], aug[K, I]](
-			config[K]{compareK: cmpK}, cmpI),
+func NewMap[I, K, V any](cmpK Cmp[K], cmpI Cmp[I], key, endKey func(I) K) Map[I, K, V] {
+	return Map[I, K, V]{
+		Map: abstract.MakeMap[I, V, config[I, K], aug[I, K]](
+			config[I, K]{
+				compareK:  cmpK,
+				getKey:    key,
+				getEndKey: endKey,
+			},
+			cmpI,
+		),
 	}
 }
 
@@ -49,8 +60,8 @@ func NewMap[I Interval[K], V, K any](cmpK Cmp[K], cmpI Cmp[I]) Map[I, V, K] {
 type Cmp[T any] func(T, T) int
 
 // Iterator constructs a new Iterator for the Map.
-func (t *Map[I, V, K]) Iterator() Iterator[K, V, I] {
-	return Iterator[K, V, I]{
+func (t *Map[I, K, V]) Iterator() Iterator[I, K, V] {
+	return Iterator[I, K, V]{
 		Iterator: t.Map.Iterator(),
 	}
 }

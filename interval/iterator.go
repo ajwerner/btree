@@ -21,8 +21,8 @@ import (
 	"github.com/ajwerner/btree/internal/abstract"
 )
 
-type Iterator[K, V any, I Interval[K]] struct {
-	abstract.Iterator[I, V, config[K], aug[K, I], *aug[K, I]]
+type Iterator[I, K, V any] struct {
+	abstract.Iterator[I, V, config[I, K], aug[ I, K], *aug[ I, K]]
 
 	o overlapScan[I, K]
 }
@@ -71,17 +71,17 @@ type Iterator[K, V any, I Interval[K]] struct {
 // 6. once the scan reaches the upper bound constraint position, it terminates.
 //    It does so because the latch at this position is the first latch with a
 //    start key larger than the search range's end key.
-type overlapScan[I Interval[K], K any] struct {
+type overlapScan[I, K any] struct {
 	bounds I
 
 	// The "soft" lower-bound constraint.
-	constrMinN       abstract.Node[I, *aug[K, I]]
+	constrMinN       abstract.Node[I, *aug[ I, K]]
 	constrMinPos     int16
 	constrMinReached bool
 	set              bool
 
 	// The "hard" upper-bound constraint.
-	constrMaxN   abstract.Node[I, *aug[K, I]]
+	constrMaxN   abstract.Node[I, *aug[ I, K]]
 	constrMaxPos int16
 }
 
@@ -95,7 +95,7 @@ func (o *overlapScan[I, K]) empty() bool {
 
 // FirstOverlap seeks to the first latch in the abstract that overlaps with the
 // provided search latch.
-func (i *Iterator[K, V, I]) FirstOverlap(bounds I) {
+func (i *Iterator[I, K, V]) FirstOverlap(bounds I) {
 	i.Reset()
 	it := lowLevel(i)
 	it.IncrementPos()
@@ -108,20 +108,20 @@ func (i *Iterator[K, V, I]) FirstOverlap(bounds I) {
 	i.findNextOverlap()
 }
 
-func lowLevel[K, V any, I Interval[K]](
-	it *Iterator[K, V, I],
-) *abstract.LowLevelIterator[I, V, config[K], aug[K, I], *aug[K, I]] {
-	return abstract.LowLevel[I, V, config[K], aug[K, I], *aug[K, I]](&it.Iterator)
+func lowLevel[I, K, V any](
+	it *Iterator[I, K, V],
+) *abstract.LowLevelIterator[I, V, config[I, K], aug[I, K], *aug[I, K]] {
+	return abstract.LowLevel[I, V, config[I, K], aug[I, K], *aug[I, K]](&it.Iterator)
 }
 
-func (i *Iterator[K, V, I]) Reset() {
+func (i *Iterator[I, K, V]) Reset() {
 	i.o.reset()
 	i.Iterator.Reset()
 }
 
 // NextOverlap positions the iterator to the latch immediately following
 // its current position that overlaps with the search latch.
-func (i *Iterator[K, V, I]) NextOverlap() {
+func (i *Iterator[I, K, V]) NextOverlap() {
 	if !i.Valid() {
 		return
 	}
@@ -134,40 +134,44 @@ func (i *Iterator[K, V, I]) NextOverlap() {
 	i.findNextOverlap()
 }
 
-func (i *Iterator[K, V, I]) constrainMinSearchBounds() {
-	k := i.o.bounds.Key()
+func (i *Iterator[I, K, V]) constrainMinSearchBounds() {
+
 	ll := lowLevel(i)
+	cfg := ll.Config().Aux
+	cmp :=cfg.compareK
 	n := ll.Node()
-	cmp := ll.Config().Config.compareK
+	k := cfg.getKey(i.o.bounds)
 	j := sort.Search(int(ll.Count()), func(j int) bool {
-		return cmp(k, n.GetKey(int16(j)).Key()) <= 0
+		return cmp(k, cfg.getKey(n.GetKey(int16(j)))) <= 0
 	})
 	i.o.constrMinN = n
 	i.o.constrMinPos = int16(j)
 }
 
-func (i *Iterator[K, V, I]) constrainMaxSearchBounds() {
+func (i *Iterator[I, K, V]) constrainMaxSearchBounds() {
 	ll := lowLevel(i)
-	cmp := ll.Config().Config.compareK
-	up := upperBound(i.o.bounds, cmp)
+	cfg := &ll.Config().Aux
+	cmp := cfg.compareK
+	up := upperBound[I](cfg, i.o.bounds)
 	n := ll.Node()
 	j := sort.Search(int(n.Count()), func(j int) bool {
-		return !up.contains(cmp, n.GetKey(int16(j)).Key())
+		return !up.contains(cmp, cfg.getKey(n.GetKey(int16(j))))
 	})
 	i.o.constrMaxN = n
 	i.o.constrMaxPos = int16(j)
 }
 
-func (i *Iterator[K, V, I]) findNextOverlap() {
+func (i *Iterator[I, K, V]) findNextOverlap() {
 	ll := lowLevel(i)
-	cmp := ll.Config().Config.compareK
+	cfg := &ll.Config().Aux
+	cmp := cfg.compareK
 	for {
 		if ll.Pos() > ll.Node().Count() {
 			// Iterate up tree.
 			ll.Ascend()
 		} else if !ll.Node().IsLeaf() {
 			// Iterate down tree.
-			if i.o.constrMinReached || ll.Child().contains(cmp, i.o.bounds.Key()) {
+			if i.o.constrMinReached || ll.Child().contains(cmp, cfg.getKey(i.o.bounds)) {
 				par := ll.Node()
 				pos := ll.Pos()
 				ll.Descend()
@@ -203,7 +207,7 @@ func (i *Iterator[K, V, I]) findNextOverlap() {
 				// span's start key.
 				return
 			}
-			if upperBound(i.Key(), cmp).contains(cmp, i.o.bounds.Key()) {
+			if upperBound(cfg, i.Key()).contains(cmp, cfg.getKey(i.o.bounds)) {
 				return
 			}
 		}

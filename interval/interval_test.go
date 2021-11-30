@@ -59,9 +59,11 @@ func TestIntervalTree(t *testing.T) {
 			t.Fatalf("expected %d, got %d", exp, got)
 		}
 	}
-	tree := NewMap[IntInterval, struct{}](
+	tree := NewMap[IntInterval, int, struct{}](
 		ordered.Compare[int],
 		IntervalCompare[IntInterval](ordered.Compare[int]),
+		IntInterval.Key,
+		IntInterval.End,
 	)
 	items := []IntInterval{{1, 4}, {2, 5}, {3, 3}, {3, 6}, {4, 7}}
 	for _, item := range items {

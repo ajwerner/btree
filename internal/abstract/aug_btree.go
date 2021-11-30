@@ -23,7 +23,7 @@ import (
 // compile-time constant.
 
 const (
-	Degree     = 32
+	Degree     = 8
 	MaxEntries = 2*Degree - 1
 	MinEntries = Degree - 1
 )
@@ -50,7 +50,7 @@ func MakeMap[K, V, Aux, A any, AP Aug[K, Aux, A]](aux Aux, cmp func(K, K) int) M
 	return Map[K, V, Aux, A, AP]{
 		cfg: Config[K, Aux]{
 			cmp:    cmp,
-			Config: aux,
+			Aux: aux,
 		},
 	}
 }
@@ -68,9 +68,8 @@ func (t *Map[K, V, Aux, A, AP]) Reset() {
 }
 
 // Clone clones the AugBTree, lazily. It does so in constant time.
-func (t *Map[K, V, Aux, A, AP]) Clone() *Map[K, V, Aux, A, AP] {
-	c := *t
-	if c.root != nil {
+func (t *Map[K, V, Aux, A, AP]) Clone() Map[K, V, Aux, A, AP] {
+	if t.root != nil {
 		// Incrementing the reference count on the root node is sufficient to
 		// ensure that no node in the cloned tree can be mutated by an actor
 		// holding a reference to the original tree and vice versa. This
@@ -85,9 +84,9 @@ func (t *Map[K, V, Aux, A, AP]) Clone() *Map[K, V, Aux, A, AP] {
 		// turn, ensures that any of the child nodes that are modified will also
 		// be copied-on-write, recursively ensuring the immutability property
 		// over the entire tree.
-		c.root.incRef()
+		t.root.incRef()
 	}
-	return &c
+	return *t
 }
 
 // Delete removes an item equal to the passed in item from the tree.
@@ -122,8 +121,6 @@ func (t *Map[K, V, Aux, A, AP]) Upsert(item K, value V) (replacedK K, replacedV 
 		newRoot.keys[0] = splitLaK
 		newRoot.values[0] = splitLaV
 		newRoot.children[0] = t.root
-		t.root.update(&t.cfg)
-		splitNode.update(&t.cfg)
 		newRoot.children[1] = splitNode
 		newRoot.update(&t.cfg)
 		t.root = newRoot
