@@ -25,7 +25,14 @@ type Config[K, A any] struct {
 	cmp func(K, K) int
 }
 
+// Updater is used to update the augmentation of the node when the subtree
+// changes.
 type Updater[K, A any] interface {
+
+	// Update should update the augmentation of the passed node, optionally
+	// using the data in the UpdataMeta to optimize the update. If the
+	// augmentation changed, and thus, changes should occur in the ancestors
+	// of the subtree rooted at this node, return true.
 	Update(Node[K, A], UpdateMeta[K, A]) (changed bool)
 }
 

@@ -18,6 +18,7 @@ package ordered
 
 import "constraints"
 
+// Compare is a comparison function for ordered types.
 func Compare[T constraints.Ordered](a, b T) int {
 	switch {
 	case a < b:

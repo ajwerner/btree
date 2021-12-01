@@ -34,7 +34,7 @@ type Iterator[I, K, V any] struct {
 // augmented interval abstract:
 // 1. all latches are sorted in the abstract based on their start key.
 // 2. all abstract nodes maintain the upper bound end key of all latches
-//    in their suabstract.
+//    in their subtree.
 //
 // The scan algorithm starts in "unconstrained minimum" and "unconstrained
 // maximum" states. To enter a "constrained minimum" state, the scan must reach
@@ -42,7 +42,7 @@ type Iterator[I, K, V any] struct {
 // Because latches in the tree are sorted by start key, once the scan enters the
 // "constrained minimum" state it will remain there. To enter a "constrained
 // maximum" state, the scan must determine the first child abstract node in a given
-// suabstract that can have latches with start keys above the search range's end
+// subtree that can have latches with start keys above the search range's end
 // key. The scan then remains in the "constrained maximum" state until it
 // traverse into this child node, at which point it moves to the "unconstrained
 // maximum" state again.
