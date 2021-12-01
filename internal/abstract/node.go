@@ -310,10 +310,10 @@ func (n *Node[K, V, A]) split(cfg *config[K, V, A], i int) (K, V, *Node[K, V, A]
 }
 
 func (n *Node[K, V, A]) update(cfg *Config[K, V, A]) bool {
-	return n.updateWithMeta(cfg, UpdateMeta[K, A]{})
+	return n.updateWithMeta(cfg, UpdateInfo[K, A]{})
 }
 
-func (n *Node[K, V, A]) updateWithMeta(cfg *Config[K, V, A], md UpdateMeta[K, A]) bool {
+func (n *Node[K, V, A]) updateWithMeta(cfg *Config[K, V, A], md UpdateInfo[K, A]) bool {
 	if cfg.Updater == nil {
 		return false
 	}
@@ -328,7 +328,7 @@ func (n *Node[K, V, A]) updateOn(cfg *Config[K, V, A], action Action, k K, affec
 	if affected != nil {
 		a = &affected.aug
 	}
-	return n.updateWithMeta(cfg, UpdateMeta[K, A]{
+	return n.updateWithMeta(cfg, UpdateInfo[K, A]{
 		Action:        action,
 		RelevantKey:   k,
 		ModifiedOther: a,

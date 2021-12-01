@@ -33,8 +33,52 @@ type Updater[K, V, A any] interface {
 	// using the data in the UpdataMeta to optimize the update. If the
 	// augmentation changed, and thus, changes should occur in the ancestors
 	// of the subtree rooted at this node, return true.
-	Update(*Node[K, V, A], UpdateMeta[K, A]) (changed bool)
+	Update(*Node[K, V, A], UpdateInfo[K, A]) (changed bool)
 }
+
+// UpdateInfo is used to describe the update operation.
+type UpdateInfo[K, A any] struct {
+
+	// Action indicates the semantics of the below fields. If Default, no
+	// fields will be populated.
+	Action Action
+
+	// ModifiedOther is the augmentation of a node which was either a previous
+	// child (Removal), new child (Insertion), or represents the new
+	// right-hand-side after a split.
+	ModifiedOther *A
+
+	// RelevantKey will be populated in all non-Default events.
+	RelevantKey K
+}
+
+// Action is used to classify the type of Update in order to permit various
+// optimizations when updated the augmented state.
+type Action int
+
+const (
+
+	// Default implies that no assumptions may be made with regards to the
+	// change in state of the node and thus the augmented state should be
+	// recalculated in full.
+	Default Action = iota
+
+	// Split indicates that this node is the left-hand side of a split.
+	// The ModifiedOther will correspond to the updated state of the
+	// augmentation for the right-hand side and the RelevantKey is the split
+	// key to be moved into the parent.
+	Split
+
+	// Removal indicates that this is a removal event. If the RelevantNode is
+	// populated, it indicates a rebalance which caused the node rooted
+	// at that subtree to also be removed.
+	Removal
+
+	// Insertion indicates that this is a insertion event. If the RelevantNode is
+	// populated, it indicates a rebalance which caused the node rooted
+	// at that subtree to also be added.
+	Insertion
+)
 
 // Compare compares two values using the same comparison function as the Map.
 func (c *Config[K, V, A]) Compare(a, b K) int { return c.cmp(a, b) }

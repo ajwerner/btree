@@ -48,7 +48,7 @@ type Map[K, V, A any] struct {
 // MakeMap constructs a new Map.
 func MakeMap[K, V, A any](cmp func(K, K) int, up Updater[K, V, A]) Map[K, V, A] {
 	return Map[K, V, A]{
-		cfg: makeConfig[K, V, A](cmp, up),
+		cfg: makeConfig(cmp, up),
 	}
 }
 

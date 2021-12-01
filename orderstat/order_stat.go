@@ -85,7 +85,7 @@ type updater[K, V any] struct{}
 
 func (u updater[K, V]) Update(
 	n *abstract.Node[K, V, aug],
-	md abstract.UpdateMeta[K, aug],
+	md abstract.UpdateInfo[K, aug],
 ) (updated bool) {
 	a := n.GetA()
 	switch md.Action {
