@@ -17,35 +17,35 @@ package abstract
 // Config is used to configure the tree. It consists of a comparison function
 // for keys and any auxiliary data provided by the instantiator. It is provided
 // on the iterator and passed to the augmentation's Update method.
-type Config[K, A any] struct {
+type Config[K, V, A any] struct {
 
 	// Updater is used to update the augmentations to the tree.
-	Updater Updater[K, A]
+	Updater Updater[K, V, A]
 
 	cmp func(K, K) int
 }
 
 // Updater is used to update the augmentation of the node when the subtree
 // changes.
-type Updater[K, A any] interface {
+type Updater[K, V, A any] interface {
 
 	// Update should update the augmentation of the passed node, optionally
 	// using the data in the UpdataMeta to optimize the update. If the
 	// augmentation changed, and thus, changes should occur in the ancestors
 	// of the subtree rooted at this node, return true.
-	Update(Node[K, A], UpdateMeta[K, A]) (changed bool)
+	Update(*Node[K, V, A], UpdateMeta[K, A]) (changed bool)
 }
 
 // Compare compares two values using the same comparison function as the Map.
-func (c *Config[K, Aux]) Compare(a, b K) int { return c.cmp(a, b) }
+func (c *Config[K, V, A]) Compare(a, b K) int { return c.cmp(a, b) }
 
 type config[K, V, A any] struct {
-	Config[K, A]
+	Config[K, V, A]
 	np *nodePool[K, V, A]
 }
 
 func makeConfig[K, V, A any](
-	cmp func(K, K) int, up Updater[K, A],
+	cmp func(K, K) int, up Updater[K, V, A],
 ) (c config[K, V, A]) {
 	c.Updater = up
 	c.cmp = cmp

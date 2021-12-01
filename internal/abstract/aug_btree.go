@@ -40,15 +40,15 @@ const (
 // Write operations are not safe for concurrent mutation by multiple
 // goroutines, but Read operations are.
 type Map[K, V, A any] struct {
-	root   *node[K, V, A]
+	root   *Node[K, V, A]
 	length int
 	cfg    config[K, V, A]
 }
 
 // MakeMap constructs a new Map.
-func MakeMap[K, V, A any](cmp func(K, K) int, up Updater[K, A]) Map[K, V, A] {
+func MakeMap[K, V, A any](cmp func(K, K) int, up Updater[K, V, A]) Map[K, V, A] {
 	return Map[K, V, A]{
-		cfg: makeConfig[K, V](cmp, up),
+		cfg: makeConfig[K, V, A](cmp, up),
 	}
 }
 

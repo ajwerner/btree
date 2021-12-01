@@ -29,7 +29,7 @@ type Map[K, V any] struct {
 // MakeMap constructs a new Map with the provided comparison function.
 func MakeMap[K, V any](cmp func(K, K) int) Map[K, V] {
 	return Map[K, V]{
-		Map: abstract.MakeMap[K, V, aug](cmp, &updater[K]{}),
+		Map: abstract.MakeMap[K, V, aug](cmp, &updater[K, V]{}),
 	}
 }
 
@@ -81,10 +81,10 @@ type aug struct {
 	children int
 }
 
-type updater[K any] struct{}
+type updater[K, V any] struct{}
 
-func (u updater[K]) Update(
-	n abstract.Node[K, aug],
+func (u updater[K, V]) Update(
+	n *abstract.Node[K, V, aug],
 	md abstract.UpdateMeta[K, aug],
 ) (updated bool) {
 	a := n.GetA()
@@ -144,7 +144,7 @@ func (it *Iterator[K, V]) Rank() int {
 		pos := ll.Pos()
 		ll.Ascend()
 		for i, parentPos := int16(0), ll.Pos(); i < parentPos; i++ {
-			before += ll.GetChild(i).children
+			before += ll.Node().GetChild(i).children
 		}
 		before += int(ll.Pos())
 		ll.Descend()
@@ -152,7 +152,7 @@ func (it *Iterator[K, V]) Rank() int {
 	}
 	if !ll.IsLeaf() {
 		for i, pos := int16(0), ll.Pos(); i <= pos; i++ {
-			before += ll.GetChild(i).children
+			before += ll.Node().GetChild(i).children
 		}
 	}
 	before += int(ll.Pos())

@@ -21,13 +21,14 @@ type aug[K any] struct {
 	keyBound[K]
 }
 
-type updater[I, K any] struct {
+type updater[I, K, V any] struct {
 	key, end func(I) K
 	cmp      Cmp[K]
+	hasEnd   func(I) bool
 }
 
-func (u *updater[I, K]) Update(
-	n abstract.Node[I, aug[K]],
+func (u *updater[I, K, V]) Update(
+	n *abstract.Node[I, V, aug[K]],
 	md abstract.UpdateMeta[I, aug[K]],
 ) (updated bool) {
 	a := n.GetA()
@@ -76,19 +77,11 @@ type keyBound[K any] struct {
 	inclusive bool
 }
 
-func (up *updater[I, K]) upperBound(interval I) keyBound[K] {
-	k, end := up.key(interval), up.end(interval)
-	// if the key is equal to the end, or somehow, greater, then we'll say that
-	// the interval is represented only by the point. There should be an
-	// invariant to disallow the end being greater than the start.
-	//
-	// TODO(ajwerner): Panic on insert if the interval invariant is not upheld.
-	// TODO(ajwerner): Consider a different API for single-point intervals like
-	// a boolean method to indicate that there is no end key.
-	if isZero(up.cmp, end) {
-		return keyBound[K]{k: k, inclusive: true}
+func (up *updater[I, K, V]) upperBound(interval I) keyBound[K] {
+	if !up.hasEnd(interval) {
+		return keyBound[K]{k: up.key(interval), inclusive: true}
 	}
-	return keyBound[K]{k: end}
+	return keyBound[K]{k: up.end(interval)}
 }
 
 func isZero[K any](cmp Cmp[K], k K) bool {
@@ -96,7 +89,7 @@ func isZero[K any](cmp Cmp[K], k K) bool {
 	return cmp(k, z) == 0
 }
 
-func (up *updater[I, K]) findUpperBound(n abstract.Node[I, aug[K]]) keyBound[K] {
+func (up *updater[I, K, V]) findUpperBound(n *abstract.Node[I, V, aug[K]]) keyBound[K] {
 	var max keyBound[K]
 	var setMax bool
 	for i, cnt := int16(0), n.Count(); i < cnt; i++ {

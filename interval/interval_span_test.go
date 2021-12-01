@@ -195,6 +195,7 @@ func makeBTree() btree {
 		compareLatches,
 		func(l *latch) Key { return l.span.key },
 		func(l *latch) Key { return l.span.endKey },
+		func(l *latch) bool { return len(l.span.endKey) > 0 },
 	)
 }
 

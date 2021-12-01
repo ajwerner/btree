@@ -24,7 +24,7 @@ import (
 type Iterator[I, K, V any] struct {
 	abstract.Iterator[I, V, aug[K]]
 
-	o overlapScan[I, K]
+	o overlapScan[I, K, V]
 }
 
 // An overlap scan is a scan over all latches that overlap with the provided
@@ -71,25 +71,25 @@ type Iterator[I, K, V any] struct {
 // 6. once the scan reaches the upper bound constraint position, it terminates.
 //    It does so because the latch at this position is the first latch with a
 //    start key larger than the search range's end key.
-type overlapScan[I, K any] struct {
+type overlapScan[I, K, V any] struct {
 	bounds I
+	set    bool
 
 	// The "soft" lower-bound constraint.
-	constrMinN       abstract.Node[I, aug[K]]
+	constrMinN       *abstract.Node[I, V, aug[K]]
 	constrMinPos     int16
 	constrMinReached bool
-	set              bool
 
 	// The "hard" upper-bound constraint.
-	constrMaxN   abstract.Node[I, aug[K]]
+	constrMaxN   *abstract.Node[I, V, aug[K]]
 	constrMaxPos int16
 }
 
-func (o *overlapScan[I, K]) reset() {
-	*o = overlapScan[I, K]{}
+func (o *overlapScan[I, K, V]) reset() {
+	*o = overlapScan[I, K, V]{}
 }
 
-func (o *overlapScan[I, K]) empty() bool {
+func (o *overlapScan[I, K, V]) empty() bool {
 	return !o.set
 }
 
@@ -102,7 +102,7 @@ func (i *Iterator[I, K, V]) FirstOverlap(bounds I) {
 	if !i.Valid() {
 		return
 	}
-	i.o = overlapScan[I, K]{bounds: bounds, set: true}
+	i.o = overlapScan[I, K, V]{bounds: bounds, set: true}
 	i.constrainMinSearchBounds()
 	i.constrainMaxSearchBounds()
 	i.findNextOverlap()
@@ -136,11 +136,11 @@ func (i *Iterator[I, K, V]) NextOverlap() {
 
 func (i *Iterator[I, K, V]) constrainMinSearchBounds() {
 	ll := lowLevel(i)
-	cfg := ll.Config().Updater.(*updater[I, K])
+	cfg := ll.Config().Updater.(*updater[I, K, V])
 	cmp := cfg.cmp
-	n := ll.Node()
 	k := cfg.key(i.o.bounds)
-	j := sort.Search(int(ll.Count()), func(j int) bool {
+	n := ll.Node()
+	j := sort.Search(int(n.Count()), func(j int) bool {
 		return cmp(k, cfg.key(n.GetKey(int16(j)))) <= 0
 	})
 	i.o.constrMinN = n
@@ -149,7 +149,7 @@ func (i *Iterator[I, K, V]) constrainMinSearchBounds() {
 
 func (i *Iterator[I, K, V]) constrainMaxSearchBounds() {
 	ll := lowLevel(i)
-	cfg := ll.Config().Updater.(*updater[I, K])
+	cfg := ll.Config().Updater.(*updater[I, K, V])
 	cmp := cfg.cmp
 	up := cfg.upperBound(i.o.bounds)
 	n := ll.Node()
@@ -162,7 +162,7 @@ func (i *Iterator[I, K, V]) constrainMaxSearchBounds() {
 
 func (i *Iterator[I, K, V]) findNextOverlap() {
 	ll := lowLevel(i)
-	cfg := ll.Config().Updater.(*updater[I, K])
+	cfg := ll.Config().Updater.(*updater[I, K, V])
 	cmp := cfg.cmp
 	for {
 		if ll.Pos() > ll.Node().Count() {

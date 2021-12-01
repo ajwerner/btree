@@ -47,13 +47,13 @@ func (i *Iterator[K, V, A]) SeekGE(key K) {
 	}
 	ll := i.lowLevel()
 	for {
-		pos, found := i.find(i.r.cfg.cmp, key)
+		pos, found := i.node.find(i.r.cfg.cmp, key)
 		i.pos = int16(pos)
 		if found {
 			return
 		}
-		if i.IsLeaf() {
-			if i.pos == i.count {
+		if i.node.IsLeaf() {
+			if i.pos == i.node.count {
 				i.Next()
 			}
 			return
@@ -70,9 +70,9 @@ func (i *Iterator[K, V, A]) SeekLT(key K) {
 	}
 	ll := i.lowLevel()
 	for {
-		pos, found := i.find(i.r.cfg.cmp, key)
+		pos, found := i.node.find(i.r.cfg.cmp, key)
 		i.pos = int16(pos)
-		if found || i.IsLeaf() {
+		if found || i.node.IsLeaf() {
 			i.Prev()
 			return
 		}
@@ -88,7 +88,7 @@ func (i *Iterator[K, V, A]) First() {
 		return
 	}
 	ll := i.lowLevel()
-	for !i.IsLeaf() {
+	for !i.node.IsLeaf() {
 		ll.Descend()
 	}
 	i.pos = 0
@@ -101,11 +101,11 @@ func (i *Iterator[K, V, A]) Last() {
 		return
 	}
 	ll := i.lowLevel()
-	for !i.IsLeaf() {
-		i.pos = i.count
+	for !i.node.IsLeaf() {
+		i.pos = i.node.count
 		ll.Descend()
 	}
-	i.pos = i.count - 1
+	i.pos = i.node.count - 1
 }
 
 // Next positions the Iterator to the key immediately following
@@ -115,19 +115,19 @@ func (i *Iterator[K, V, A]) Next() {
 		return
 	}
 	ll := i.lowLevel()
-	if i.IsLeaf() {
+	if i.node.IsLeaf() {
 		i.pos++
-		if i.pos < i.count {
+		if i.pos < i.node.count {
 			return
 		}
-		for i.s.len() > 0 && i.pos >= i.count {
+		for i.s.len() > 0 && i.pos >= i.node.count {
 			ll.Ascend()
 		}
 		return
 	}
 	i.pos++
 	ll.Descend()
-	for !i.IsLeaf() {
+	for !i.node.IsLeaf() {
 		i.pos = 0
 		ll.Descend()
 	}
@@ -141,7 +141,7 @@ func (i *Iterator[K, V, A]) Prev() {
 		return
 	}
 	ll := i.lowLevel()
-	if i.IsLeaf() {
+	if i.node.IsLeaf() {
 		i.pos--
 		if i.pos >= 0 {
 			return
@@ -154,26 +154,26 @@ func (i *Iterator[K, V, A]) Prev() {
 	}
 
 	ll.Descend()
-	for !i.IsLeaf() {
-		i.pos = i.count
+	for !i.node.IsLeaf() {
+		i.pos = i.node.count
 		ll.Descend()
 	}
-	i.pos = i.count - 1
+	i.pos = i.node.count - 1
 }
 
 // Valid returns whether the Iterator is positioned at a valid position.
 func (i *Iterator[K, V, A]) Valid() bool {
-	return i.node != nil && i.pos >= 0 && i.pos < i.count
+	return i.node != nil && i.pos >= 0 && i.pos < i.node.count
 }
 
 // Cur returns the key at the Iterator's current position. It is illegal
 // to call Key if the Iterator is not valid.
 func (i *Iterator[K, V, A]) Cur() K {
-	return i.keys[i.pos]
+	return i.node.keys[i.pos]
 }
 
 // Value returns the value at the Iterator's current position. It is illegal
 // to call Value if the Iterator is not valid.
 func (i *Iterator[K, V, A]) Value() V {
-	return i.values[i.pos]
+	return i.node.values[i.pos]
 }

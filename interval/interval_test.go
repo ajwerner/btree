@@ -74,6 +74,7 @@ func TestIntervalTree(t *testing.T) {
 		IntervalCompare[IntInterval](ordered.Compare[int]),
 		IntInterval.Key,
 		IntInterval.End,
+		nil,
 	)
 	items := []IntInterval{{1, 4}, {2, 5}, {3, 3}, {3, 6}, {4, 7}}
 	for _, item := range items {

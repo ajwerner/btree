@@ -29,14 +29,25 @@ type config[I, K any] struct {
 
 // MakeMap constructs a new map with the provided comparison functions
 // for intervals and for their bounds.
-func MakeMap[I, K, V any](cmpK Cmp[K], cmpI Cmp[I], key, endKey func(I) K) Map[I, K, V] {
+func MakeMap[I, K, V any](
+	cmpK Cmp[K],
+	cmpI Cmp[I],
+	key, endKey func(I) K,
+	hasEnd func(I) bool,
+) Map[I, K, V] {
+	if hasEnd == nil {
+		hasEnd = func(i I) bool {
+			return !isZero(cmpK, endKey(i))
+		}
+	}
 	return Map[I, K, V]{
 		Map: abstract.MakeMap[I, V, aug[K]](
 			cmpI,
-			&updater[I, K]{
-				cmp: cmpK,
-				key: key,
-				end: endKey,
+			&updater[I, K, V]{
+				cmp:    cmpK,
+				key:    key,
+				end:    endKey,
+				hasEnd: hasEnd,
 			},
 		),
 	}
@@ -62,8 +73,13 @@ func (t *Map[I, K, V]) Iterator() Iterator[I, K, V] {
 type Set[I, T any] Map[I, T, struct{}]
 
 // MakeSet constructs a new Set with the provided comparison function.
-func MakeSet[I, T any](cmpT Cmp[T], cmpI Cmp[I], key, endKey func(I) T) Set[I, T] {
-	return (Set[I, T])(MakeMap[I, T, struct{}](cmpT, cmpI, key, endKey))
+func MakeSet[I, T any](
+	cmpT Cmp[T],
+	cmpI Cmp[I],
+	key, endKey func(I) T,
+	hasEnd func(I) bool,
+) Set[I, T] {
+	return (Set[I, T])(MakeMap[I, T, struct{}](cmpT, cmpI, key, endKey, hasEnd))
 }
 
 // Clone clones the Set, lazily. It does so in constant time.

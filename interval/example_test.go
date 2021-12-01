@@ -40,6 +40,7 @@ func ExampleBlog() {
 		pair[int].compare,
 		pair[int].first,
 		pair[int].second,
+		nil,
 	)
 	for _, p := range []pair[int]{
 		{1, 2}, {2, 3}, {1, 5}, {0, 6}, {2, 7},

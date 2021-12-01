@@ -14,7 +14,7 @@ func LowLevel[K, V, A any](
 }
 
 // Config returns the Map's config.
-func (i *LowLevelIterator[K, V, A]) Config() *Config[K, A] {
+func (i *LowLevelIterator[K, V, A]) Config() *Config[K, V, A] {
 	return &i.r.cfg.Config
 }
 
@@ -23,19 +23,19 @@ func (i *LowLevelIterator[K, V, A]) IncrementPos() {
 	i.SetPos(i.pos + 1)
 }
 
-// SetPos sets the iterator's position with the current node.
+// SetPos sets the iterator's position within the current node.
 func (i *LowLevelIterator[K, V, A]) SetPos(pos int16) {
 	i.pos = pos
+}
+
+// Node returns the current Node.
+func (i *LowLevelIterator[K, V, A]) Node() *Node[K, V, A] {
+	return i.node
 }
 
 // IsLeaf returns true if the current node is a leaf.
 func (i *LowLevelIterator[K, V, A]) IsLeaf() bool {
 	return i.node.IsLeaf()
-}
-
-// Node returns the current node.
-func (i *LowLevelIterator[K, V, A]) Node() Node[K, A] {
-	return i.node
 }
 
 // Pos returns the current position within the current node.
@@ -53,7 +53,7 @@ func (i *LowLevelIterator[K, V, A]) Depth() int {
 // It is illegal to call if this is a leaf node or there is no child
 // node at the current position.
 func (i *LowLevelIterator[K, V, A]) Child() *A {
-	return &i.children[i.pos].aug
+	return &i.node.children[i.pos].aug
 }
 
 // Descend pushes the current position into the iterators stack and
@@ -62,7 +62,7 @@ func (i *LowLevelIterator[K, V, A]) Child() *A {
 // new node will be 0.
 func (i *LowLevelIterator[K, V, A]) Descend() {
 	i.s.push(i.iterFrame)
-	i.iterFrame = i.makeFrame(i.children[i.pos], 0)
+	i.iterFrame = i.makeFrame(i.node.children[i.pos], 0)
 }
 
 // Ascend ascends up to the current node's parent and resets the position
@@ -72,7 +72,7 @@ func (i *LowLevelIterator[K, V, A]) Ascend() {
 }
 
 func (i *LowLevelIterator[K, V, A]) makeFrame(
-	n *node[K, V, A], pos int16,
+	n *Node[K, V, A], pos int16,
 ) iterFrame[K, V, A] {
 	return iterFrame[K, V, A]{
 		node: n,

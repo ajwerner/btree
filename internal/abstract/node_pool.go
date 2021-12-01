@@ -23,7 +23,7 @@ type nodePool[K, V, A any] struct {
 var syncPoolMap sync.Map
 
 func getNodePool[K, V, A any]() *nodePool[K, V, A] {
-	var nilNode *node[K, V, A]
+	var nilNode *Node[K, V, A]
 	v, ok := syncPoolMap.Load(nilNode)
 	if !ok {
 		v, _ = syncPoolMap.LoadOrStore(nilNode, newNodePool[K, V, A]())
@@ -36,40 +36,40 @@ func newNodePool[K, V, A any]() *nodePool[K, V, A] {
 	np := nodePool[K, V, A]{}
 	np.leafNodePool = sync.Pool{
 		New: func() interface{} {
-			return new(node[K, V, A])
+			return new(Node[K, V, A])
 		},
 	}
 	np.interiorNodePool = sync.Pool{
 		New: func() interface{} {
 			n := new(interiorNode[K, V, A])
-			n.node.children = &n.children
-			return &n.node
+			n.Node.children = &n.children
+			return &n.Node
 		},
 	}
 	return &np
 }
 
-func (np *nodePool[K, V, A]) getInteriorNode() *node[K, V, A] {
-	n := np.interiorNodePool.Get().(*node[K, V, A])
+func (np *nodePool[K, V, A]) getInteriorNode() *Node[K, V, A] {
+	n := np.interiorNodePool.Get().(*Node[K, V, A])
 	n.ref = 1
 	return n
 }
 
-func (np *nodePool[K, V, A]) getLeafNode() *node[K, V, A] {
-	n := np.leafNodePool.Get().(*node[K, V, A])
+func (np *nodePool[K, V, A]) getLeafNode() *Node[K, V, A] {
+	n := np.leafNodePool.Get().(*Node[K, V, A])
 	n.ref = 1
 	return n
 }
 
-func (np *nodePool[K, V, A]) putInteriorNode(n *node[K, V, A]) {
+func (np *nodePool[K, V, A]) putInteriorNode(n *Node[K, V, A]) {
 	children := n.children
-	*children = [MaxEntries + 1]*node[K, V, A]{}
-	*n = node[K, V, A]{}
+	*children = [MaxEntries + 1]*Node[K, V, A]{}
+	*n = Node[K, V, A]{}
 	n.children = children
 	np.interiorNodePool.Put(n)
 }
 
-func (np *nodePool[K, V, A]) putLeafNode(n *node[K, V, A]) {
-	*n = node[K, V, A]{}
+func (np *nodePool[K, V, A]) putLeafNode(n *Node[K, V, A]) {
+	*n = Node[K, V, A]{}
 	np.leafNodePool.Put(n)
 }

@@ -15,6 +15,7 @@
 
 package abstract
 
+/*
 // Node represents an abstraction of a node exposed to the
 // augmentation and low-level iteration primitives.
 type Node[K, A any] interface {
@@ -35,6 +36,7 @@ type Node[K, A any] interface {
 	// is greater than 0.
 	GetChild(i int16) *A
 }
+*/
 
 // Action is used to classify the type of Update in order to permit various
 // optimizations when updated the augmented state.

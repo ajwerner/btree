@@ -23,14 +23,14 @@ type iterStack[K, V, A any] struct {
 	s    []iterFrame[K, V, A]
 }
 
-const iterStackDepth = 6
+const iterStackDepth = 10
 
 // Used to avoid allocations for stacks below a certain size.
 type iterStackArr[K, V, A any] [iterStackDepth]iterFrame[K, V, A]
 
 type iterFrame[K, V, A any] struct {
-	*node[K, V, A]
-	pos int16
+	node *Node[K, V, A]
+	pos  int16
 }
 
 func (is *iterStack[K, V, A]) push(f iterFrame[K, V, A]) {
