@@ -1,4 +1,4 @@
-module github.com/ajwerner/btree
+module github.com/anacrolix/btree
 
 go 1.23
 

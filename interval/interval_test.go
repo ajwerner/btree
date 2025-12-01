@@ -17,7 +17,7 @@ package interval
 import (
 	"testing"
 
-	"github.com/ajwerner/btree/internal/ordered"
+	"github.com/anacrolix/btree/internal/ordered"
 	"github.com/stretchr/testify/require"
 )
 

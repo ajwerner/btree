@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ajwerner/btree"
+	"github.com/anacrolix/btree"
 )
 
 func ExampleMap() {

@@ -17,7 +17,7 @@ package orderstat
 import (
 	"fmt"
 
-	"github.com/ajwerner/btree/internal/abstract"
+	"github.com/anacrolix/btree/internal/abstract"
 )
 
 // Map is a ordered map from K to V which additionally offers the methods

@@ -18,7 +18,7 @@ package interval
 import (
 	"sort"
 
-	"github.com/ajwerner/btree/internal/abstract"
+	"github.com/anacrolix/btree/internal/abstract"
 )
 
 type Iterator[I, K, V any] struct {

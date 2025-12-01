@@ -17,7 +17,7 @@ package btree
 import (
 	"testing"
 
-	"github.com/ajwerner/btree/internal/ordered"
+	"github.com/anacrolix/btree/internal/ordered"
 )
 
 func TestBTree(t *testing.T) {

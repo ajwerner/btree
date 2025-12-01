@@ -14,7 +14,7 @@
 
 package interval
 
-import "github.com/ajwerner/btree/internal/abstract"
+import "github.com/anacrolix/btree/internal/abstract"
 
 // Map is a ordered map from I to V where I is an interval. Its iterator
 // provides efficient overlap queries.
