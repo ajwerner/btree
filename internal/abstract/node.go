@@ -126,10 +126,10 @@ func (n *Node[K, V, A]) clone(
 	} else {
 		c = np.getInteriorNode()
 	}
-	// NB: copy field-by-field without touching N.N.ref to avoid
+	// NB: copy field-by-field without touching n.ref to avoid
 	// triggering the race detector and looking like a data race.
 	c.count = n.count
-	n.aug = c.aug
+	c.aug = n.aug
 	c.keys = n.keys
 	if !c.IsLeaf() {
 		// Copy children and increase each refcount.
