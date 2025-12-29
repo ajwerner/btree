@@ -62,7 +62,7 @@ func (i *Iterator[K, V, A]) SeekGE(key K) {
 	}
 }
 
-// SeekLT seeks to the first key less-than the provided key.
+// SeekLT seeks to the last key less-than the provided key.
 func (i *Iterator[K, V, A]) SeekLT(key K) {
 	i.Reset()
 	if i.node == nil {
