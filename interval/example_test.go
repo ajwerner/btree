@@ -15,20 +15,19 @@
 package interval_test
 
 import (
-	"constraints"
+	"cmp"
 	"fmt"
 
-	"github.com/ajwerner/btree/internal/ordered"
 	"github.com/ajwerner/btree/interval"
 )
 
-type pair[T constraints.Ordered] [2]T
+type pair[T cmp.Ordered] [2]T
 
 func (p pair[T]) compare(o pair[T]) int {
-	if c := ordered.Compare(p.first(), o.first()); c != 0 {
+	if c := cmp.Compare(p.first(), o.first()); c != 0 {
 		return c
 	}
-	return ordered.Compare(p.second(), o.second())
+	return cmp.Compare(p.second(), o.second())
 }
 
 func (p pair[T]) first() T  { return p[0] }
@@ -36,7 +35,7 @@ func (p pair[T]) second() T { return p[1] }
 
 func ExampleBlog() {
 	m := interval.MakeSet(
-		ordered.Compare[int],
+		cmp.Compare[int],
 		pair[int].compare,
 		pair[int].first,
 		pair[int].second,

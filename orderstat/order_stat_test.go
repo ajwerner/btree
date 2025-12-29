@@ -15,16 +15,16 @@
 package orderstat
 
 import (
+	"cmp"
 	"fmt"
 	"math/rand"
 	"testing"
 
-	"github.com/ajwerner/btree/internal/ordered"
 	"github.com/stretchr/testify/require"
 )
 
 func TestOrderStatTree(t *testing.T) {
-	tree := MakeMap[int, int](ordered.Compare[int])
+	tree := MakeMap[int, int](cmp.Compare[int])
 	tree.Upsert(2, 1)
 	tree.Upsert(3, 2)
 	tree.Upsert(5, 4)
@@ -42,7 +42,7 @@ func TestOrderStatTree(t *testing.T) {
 
 func TestOrderStatNth(t *testing.T) {
 	t.Parallel()
-	tree := MakeSet(ordered.Compare[int])
+	tree := MakeSet(cmp.Compare[int])
 	const maxN = 1000
 	N := rand.Intn(maxN)
 	items := make([]int, 0, N)
@@ -89,7 +89,7 @@ func TestOrderStatNth(t *testing.T) {
 }
 
 func ExampleBlog() {
-	s := MakeSet(ordered.Compare[int])
+	s := MakeSet(cmp.Compare[int])
 	for _, i := range rand.Perm(100) {
 		s.Upsert(i)
 	}

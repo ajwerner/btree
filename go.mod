@@ -1,6 +1,6 @@
 module github.com/ajwerner/btree
 
-go 1.18
+go 1.24
 
 require github.com/stretchr/testify v1.6.1
 

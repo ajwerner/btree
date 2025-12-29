@@ -15,9 +15,9 @@
 package interval
 
 import (
+	"cmp"
 	"testing"
 
-	"github.com/ajwerner/btree/internal/ordered"
 	"github.com/stretchr/testify/require"
 )
 
@@ -70,8 +70,8 @@ func TestIntervalTree(t *testing.T) {
 		}
 	}
 	tree := MakeMap[IntInterval, int, struct{}](
-		ordered.Compare[int],
-		IntervalCompare[IntInterval](ordered.Compare[int]),
+		cmp.Compare[int],
+		IntervalCompare[IntInterval](cmp.Compare[int]),
 		IntInterval.Key,
 		IntInterval.End,
 		nil,

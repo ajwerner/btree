@@ -17,6 +17,7 @@ package interval
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -25,7 +26,6 @@ import (
 	"time"
 
 	"github.com/ajwerner/btree/internal/abstract"
-	"github.com/ajwerner/btree/internal/ordered"
 	"github.com/stretchr/testify/require"
 )
 
@@ -174,13 +174,11 @@ func checkIter(t *testing.T, it iterator, start, end int, spanMemo map[int]Span)
 }
 
 func compareLatches(a, b *latch) int {
-	if c := a.span.key.Compare(b.span.key); c != 0 {
-		return c
-	}
-	if c := a.span.endKey.Compare(b.span.endKey); c != 0 {
-		return c
-	}
-	return ordered.Compare(a.id, b.id)
+	return cmp.Or(
+		a.span.key.Compare(b.span.key),
+		a.span.endKey.Compare(b.span.endKey),
+		cmp.Compare(a.id, b.id),
+	)
 }
 
 func (k Key) Compare(o Key) int {

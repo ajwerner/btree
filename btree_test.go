@@ -15,9 +15,8 @@
 package btree
 
 import (
+	"cmp"
 	"testing"
-
-	"github.com/ajwerner/btree/internal/ordered"
 )
 
 func TestBTree(t *testing.T) {
@@ -28,7 +27,7 @@ func TestBTree(t *testing.T) {
 		}
 	}
 
-	tree := MakeSet(ordered.Compare[int])
+	tree := MakeSet(cmp.Compare[int])
 	tree.Upsert(2)
 	tree.Upsert(12)
 	tree.Upsert(1)
