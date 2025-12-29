@@ -33,7 +33,7 @@ func (p pair[T]) compare(o pair[T]) int {
 func (p pair[T]) first() T  { return p[0] }
 func (p pair[T]) second() T { return p[1] }
 
-func ExampleBlog() {
+func Example() {
 	m := interval.MakeSet(
 		cmp.Compare[int],
 		pair[int].compare,
