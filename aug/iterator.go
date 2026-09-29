@@ -42,35 +42,58 @@ func (i *Iterator[K, V, A]) Reset() {
 	i.s.reset()
 }
 
-// SeekGE seeks to the first key greater-than or equal to the provided
-// key.
-func (i *Iterator[K, V, A]) SeekGE(key K) {
+// SeekGE seeks to the first key greater than or equal to the provided key
+// and reports whether that key is equal to it. If no such key exists the
+// Iterator is left past the end.
+func (i *Iterator[K, V, A]) SeekGE(key K) (found bool) {
 	i.Reset()
 	if i.node == nil {
-		return
+		return false
 	}
 	ll := i.lowLevel()
 	for {
 		pos, found := i.node.find(&i.r.cfg, key)
 		i.pos = int16(pos)
 		if found {
-			return
+			return true
 		}
 		if i.node.IsLeaf() {
 			if i.pos == i.node.Count() {
 				i.Next()
 			}
-			return
+			return false
 		}
 		ll.Descend()
 	}
 }
 
-// SeekLT seeks to the last key less-than the provided key.
-func (i *Iterator[K, V, A]) SeekLT(key K) {
+// SeekGT seeks to the first key greater than the provided key and reports
+// whether the provided key exists. If no such key exists the Iterator is
+// left past the end.
+func (i *Iterator[K, V, A]) SeekGT(key K) (found bool) {
+	if found = i.SeekGE(key); found {
+		i.Next()
+	}
+	return found
+}
+
+// SeekLE seeks to the last key less than or equal to the provided key and
+// reports whether that key is equal to it. If no such key exists the
+// Iterator is left before the beginning.
+func (i *Iterator[K, V, A]) SeekLE(key K) (found bool) {
+	if found = i.SeekGE(key); !found {
+		i.Prev()
+	}
+	return found
+}
+
+// SeekLT seeks to the last key less than the provided key and reports
+// whether the provided key exists. If no such key exists the Iterator is
+// left before the beginning.
+func (i *Iterator[K, V, A]) SeekLT(key K) (found bool) {
 	i.Reset()
 	if i.node == nil {
-		return
+		return false
 	}
 	ll := i.lowLevel()
 	for {
@@ -78,7 +101,7 @@ func (i *Iterator[K, V, A]) SeekLT(key K) {
 		i.pos = int16(pos)
 		if found || i.node.IsLeaf() {
 			i.Prev()
-			return
+			return found
 		}
 		ll.Descend()
 	}

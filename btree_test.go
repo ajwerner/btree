@@ -102,8 +102,10 @@ func checkMap(t *testing.T, tag string, m *Map[int, int], r *model, rng *rand.Ra
 		if ok != rok || v != rv {
 			t.Fatalf("%s: Get(%d) = (%d, %v), want (%d, %v)", tag, k, v, ok, rv, rok)
 		}
-		idx, _ := slices.BinarySearch(keys, k)
-		it.SeekGE(k)
+		idx, exists := slices.BinarySearch(keys, k)
+		if found := it.SeekGE(k); found != exists {
+			t.Fatalf("%s: SeekGE(%d) found=%v, want %v", tag, k, found, exists)
+		}
 		if idx < len(keys) {
 			if !it.Valid() || it.Key() != keys[idx] {
 				t.Fatalf("%s: SeekGE(%d) valid=%v cur=%d, want %d", tag, k, it.Valid(), it.Key(), keys[idx])

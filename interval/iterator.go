@@ -114,9 +114,51 @@ func lowLevel[I, K, V any](
 	return aug.LowLevel(&it.Iterator)
 }
 
+// Reset marks the iterator as invalid and clears any state, including an
+// overlap scan in progress.
 func (i *Iterator[I, K, V]) Reset() {
 	i.o.reset()
 	i.Iterator.Reset()
+}
+
+// First seeks to the first interval, ending any overlap scan.
+func (i *Iterator[I, K, V]) First() {
+	i.o.reset()
+	i.Iterator.First()
+}
+
+// Last seeks to the last interval, ending any overlap scan.
+func (i *Iterator[I, K, V]) Last() {
+	i.o.reset()
+	i.Iterator.Last()
+}
+
+// SeekGE seeks to the first interval greater than or equal to the
+// provided one, ending any overlap scan.
+func (i *Iterator[I, K, V]) SeekGE(bounds I) bool {
+	i.o.reset()
+	return i.Iterator.SeekGE(bounds)
+}
+
+// SeekGT seeks to the first interval greater than the provided one, ending
+// any overlap scan.
+func (i *Iterator[I, K, V]) SeekGT(bounds I) bool {
+	i.o.reset()
+	return i.Iterator.SeekGT(bounds)
+}
+
+// SeekLE seeks to the last interval less than or equal to the provided one,
+// ending any overlap scan.
+func (i *Iterator[I, K, V]) SeekLE(bounds I) bool {
+	i.o.reset()
+	return i.Iterator.SeekLE(bounds)
+}
+
+// SeekLT seeks to the last interval less than the provided one, ending any
+// overlap scan.
+func (i *Iterator[I, K, V]) SeekLT(bounds I) bool {
+	i.o.reset()
+	return i.Iterator.SeekLT(bounds)
 }
 
 // NextOverlap positions the iterator to the latch immediately following

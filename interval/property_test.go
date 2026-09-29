@@ -172,3 +172,35 @@ func testOverlapProperty(t *testing.T, degree int) {
 	}
 	check(m, ref)
 }
+
+// TestOverlapScanAfterSeek checks that a plain seek ends an overlap scan
+// in progress, so that a later NextOverlap does not continue with stale
+// constraints.
+func TestOverlapScanAfterSeek(t *testing.T) {
+	m := interval.NewSet(spanBounds())
+	for i := 0; i < 100; i += 2 {
+		m.Upsert(span{i, i + 3})
+	}
+	it := m.Iterator()
+	it.FirstOverlap(span{10, 12})
+	if !it.Valid() || it.Key() != (span{8, 11}) {
+		t.Fatalf("FirstOverlap at %v", it.Key())
+	}
+	it.SeekGE(span{50, 53})
+	if !it.Valid() || it.Key() != (span{50, 53}) {
+		t.Fatalf("SeekGE at %v", it.Key())
+	}
+	// With the scan ended, NextOverlap invalidates rather than scanning.
+	it.NextOverlap()
+	if it.Valid() {
+		t.Fatalf("NextOverlap after SeekGE is valid at %v", it.Key())
+	}
+	// And a fresh scan works.
+	var got []span
+	for it.FirstOverlap(span{50, 51}); it.Valid(); it.NextOverlap() {
+		got = append(got, it.Key())
+	}
+	if want := []span{{48, 51}, {50, 53}}; !slices.Equal(got, want) {
+		t.Fatalf("scan after seek: %v, want %v", got, want)
+	}
+}
