@@ -22,7 +22,9 @@ import (
 
 // Map is an augmented copy-on-write B-tree map from K to V. Each node
 // carries an augmentation of type A maintained by the Updater given to New.
-// See the package documentation for the ownership and concurrency rules.
+// The zero Map is not usable; construct one with New or NewOrdered, and do
+// not copy it by value. See the package documentation for the ownership
+// and concurrency rules.
 type Map[K, V, A any] struct {
 	root   *Node[K, V, A]
 	length int

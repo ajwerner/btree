@@ -35,9 +35,15 @@ type Node[K, V, A any] struct {
 	children []*Node[K, V, A] // empty for leaves
 }
 
-// Aug returns a pointer to the node's augmentation.
-func (n *Node[K, V, A]) Aug() *A {
-	return &n.aug
+// Aug returns the node's augmentation.
+func (n *Node[K, V, A]) Aug() A {
+	return n.aug
+}
+
+// SetAug replaces the node's augmentation. Only an Updater, in its Update
+// method, may call it.
+func (n *Node[K, V, A]) SetAug(a A) {
+	n.aug = a
 }
 
 // IsLeaf returns true if the node is a leaf.
@@ -61,12 +67,9 @@ func (n *Node[K, V, A]) Value(i int16) V {
 }
 
 // ChildAug returns the augmentation of the child at position i, which must
-// be in [0, Count()] for a non-leaf node. It returns nil for a leaf.
-func (n *Node[K, V, A]) ChildAug(i int16) *A {
-	if int(i) < len(n.children) {
-		return &n.children[i].aug
-	}
-	return nil
+// be in [0, Count()]. It is illegal to call on a leaf.
+func (n *Node[K, V, A]) ChildAug(i int16) A {
+	return n.children[i].aug
 }
 
 func (c *config[K, V, A]) getNode() *Node[K, V, A] {

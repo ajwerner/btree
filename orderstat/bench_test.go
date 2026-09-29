@@ -73,15 +73,20 @@ func BenchmarkSeekNth(b *testing.B) {
 	}
 }
 
-func BenchmarkSeekNthViaSeekWhere(b *testing.B) {
+func BenchmarkSeekNthViaSeekPrefix(b *testing.B) {
 	for _, n := range []int{10_000, 1_000_000} {
-		s, p := benchSet(n)
+		m := New[int, struct{}](cmp.Compare[int])
+		rng := rand.New(rand.NewPCG(1, 2))
+		p := rng.Perm(n)
+		for _, k := range p {
+			m.Upsert(k, struct{}{})
+		}
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
-			it := s.Iterator()
+			it := m.Iterator()
 			i := 0
 			for b.Loop() {
 				nth := p[i%n]
-				it.SeekWhere(func(prefix, contribution int) bool { return prefix+contribution > nth })
+				it.SeekPrefix(func(inclusive int) bool { return inclusive > nth })
 				i++
 			}
 		})

@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### API (breaking)
+
+- Every positioning method on iterators and cursors (`First`, `Last`,
+  `Next`, `Prev`, the seeks, `SeekNth`) returns whether the iterator is now
+  at an entry. `SeekGE` and `SeekLT` no longer report whether the sought
+  key exists; `SeekExact` does. Code that compiled against `v0.2.0` and
+  used a seek's result as "found" changes meaning: replace it with
+  `SeekExact`.
+- Sets: `Get(probe)` returns the stored item equal to a probe; `Delete`
+  returns the removed item. Set iterators and cursors are their own types
+  (`SetIterator`, `SetCursor`) with `Item` and no `Value`, `SetValue` or
+  phantom value arguments.
+- Cursors: `Upsert` returns the replaced key and value like `Map.Upsert`;
+  `Rekey` returns the entry it displaced at the destination.
+- interval: queries are `Span`s (`HalfOpen`, `Point`) instead of stored
+  intervals; `Overlaps(span)` returns an `OverlapIterator` whose `Next` is
+  always the next overlap, and `Iterator` is a plain iterator with no
+  overlap mode. `Bounds.HasEnd` defaults to "every interval has an end;
+  one whose end is not after its start is a point" instead of the zero-end
+  convention.
+- aug: `Monoid`/`Group` are `CommutativeMonoid`/`CommutativeGroup` and
+  require an `Identity` method; `SeekWhere(prefix, contribution)` is
+  `SeekPrefix(inclusivePrefix)` with a predicate that turns true at most
+  once, and returns the prefix and whether an entry was found;
+  `Node.Aug` and `ChildAug` return values and `Node.SetAug` is for
+  Updaters; `MonoidMap` no longer exposes an embedded `Map`; `New` panics
+  on a nil comparison function. The package documents one ownership
+  contract for every collection.
+
 ### Fixed
 
 - Splits, merges and rebalances now recompute the restructured node and

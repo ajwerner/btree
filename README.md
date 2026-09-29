@@ -25,7 +25,9 @@ snapshot.Clear() // returns nodes only this tree references to the free list
 
 The stateful `Iterator` and the range-over-func views cost about the same per entry when the loop body does real work; the iterator is the one to use for seeking and stepping, the views for whole-range walks.
 
-A `Cursor` is an iterator that can also mutate the entry it is on and stay valid: `SetValue`, `Delete` (leaves the cursor on the successor), `Rekey` (moves the entry to a new key) and a hinted `Upsert`. Each acts in place when the leaf allows it and otherwise falls back to the top-down algorithm plus a re-seek, so "seek, then move this entry" costs one descent instead of three.
+A `Cursor` is an iterator that can also mutate the entry it is on and stay valid: `SetValue`, `Delete` (leaves the cursor on the successor), `Rekey` (moves the entry to a new key) and a hinted `Upsert`, each returning the displaced entry as the map methods do. Each acts in place when the leaf allows it and otherwise falls back to the top-down algorithm plus a re-seek, so "seek, then move this entry" costs one descent instead of three.
+
+Sets are keyed by a comparison function, so two items that compare equal are the same item; `Set.Get(probe)` returns the stored one. Set iterators and cursors have no phantom values.
 
 Writes to a map must be serialized by the caller; any number of goroutines may read a map, or a clone of it, while no goroutine writes it. See the `aug` package documentation for details.
 
@@ -39,7 +41,7 @@ Against google/btree v1.1.3 at equal degree, point operations (insert, get, dele
 
 ## Interval Trees
 
-The `interval` package provides interval trees for efficiently finding all intervals that overlap a query range. The iterator supports `FirstOverlap()` and `NextOverlap()` methods for querying overlapping intervals.
+The `interval` package provides interval trees for efficiently finding all intervals that overlap a query. Stored intervals are described by `Bounds` (how to read a start and end from your type); queries are `Span`s built with `HalfOpen(start, end)` or `Point(key)`, so asking about a range never requires building a stored object. `Overlaps(span)` returns an `OverlapIterator` whose `Next` always means the next overlap; `Overlapping(span)` is the range-over-func form.
 
 ## Order-Statistic Trees
 
@@ -47,7 +49,7 @@ The `orderstat` package provides order-statistic trees: `Rank(key)` (the number 
 
 ## Custom augmentations
 
-Describe an augmentation as a `Monoid` (a per-entry contribution and a commutative, associative `Combine`; add `Uncombine` for O(1) removals) and build the map with `aug.NewMonoid(cmp, m)`. Ready-made pieces: `aug.Count`, `aug.Sum(f)`, and `aug.PairOf(a, b)` to keep several side by side. A `MonoidMap` answers `Total()`, `Prefix(key)` and `Aggregate(lo, hi)`, and its iterators and cursors answer `Prefix()` and `SeekWhere(pred)`, which descends once to the first entry at which a monotone predicate on the running prefix flips (selection by rank, by cumulative sum, and so on). See `Example_customAugmentation` in package `aug`. Augmentations that are not monoids (the interval tree's upper bound) implement `aug.Updater` directly with `aug.New`.
+Describe an augmentation as a `CommutativeMonoid` (an `Identity`, a per-entry contribution and a commutative, associative `Combine`; add `Uncombine` for O(1) removals) and build the map with `aug.NewMonoid(cmp, m)`. Ready-made pieces: `aug.Count`, `aug.Sum(f)`, and `aug.PairOf(a, b)` to keep several side by side. A `MonoidMap` answers `Total()`, `Prefix(key)` and `Aggregate(lo, hi)`, and its iterators and cursors answer `Prefix()` and `SeekPrefix(pred)`, which descends once to the first entry whose inclusive prefix satisfies a predicate that turns from false to true at most once (selection by rank, by cumulative weight, and so on). See `Example_customAugmentation` in package `aug`. Augmentations that are not monoids (the interval tree's upper bound) implement `aug.Updater` directly with `aug.New`.
 
 ## License
 

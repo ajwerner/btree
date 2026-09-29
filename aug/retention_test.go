@@ -140,7 +140,7 @@ func TestPointerTypesUnderGCPressure(t *testing.T) {
 			m.Delete(k)
 			delete(ref, k)
 		case 3:
-			if c.SeekGE(k) {
+			if c.SeekExact(k) {
 				c.Delete()
 				delete(ref, k)
 			}

@@ -21,8 +21,9 @@
 // which is O(k) when matches are adjacent and up to O(k log(n/k)) when
 // they are scattered.
 //
-// An interval whose end is not after its start (or which has no end, see
-// Bounds.HasEnd) is a point containing only its start key.
+// A stored interval whose end is not after its start (or which has no
+// end, see Bounds.HasEnd) is a point containing only its start key.
+// Queries are Spans: HalfOpen(start, end) or Point(key).
 package interval
 
 import (
@@ -52,8 +53,9 @@ type Bounds[I, K any] struct {
 	End func(I) K
 
 	// HasEnd reports whether an interval has an end. It is optional: by
-	// default an interval whose End is the zero K has none. An interval
-	// without an end, or whose end is not after its start, is a point.
+	// default every interval has one, and an interval whose End is not
+	// after its Key is a point containing only its Key. A type that marks
+	// points some other way (a nil end, a flag) provides HasEnd.
 	HasEnd func(I) bool
 
 	// TieBreak orders intervals with equal start keys and so defines which
@@ -88,10 +90,7 @@ func (b Bounds[I, K]) withDefaults() Bounds[I, K] {
 		panic("interval: Bounds.Compare, Key and End are required")
 	}
 	if b.HasEnd == nil {
-		b.HasEnd = func(i I) bool {
-			var zero K
-			return b.Compare(b.End(i), zero) != 0
-		}
+		b.HasEnd = func(I) bool { return true }
 	}
 	if b.TieBreak == nil {
 		b.TieBreak = func(x, y I) int {
@@ -139,12 +138,17 @@ func (m *Map[I, K, V]) a() *aug.Map[I, V, subtreeBound[K]] {
 	return (*aug.Map[I, V, subtreeBound[K]])(m)
 }
 
+// Overlaps returns an OverlapIterator positioned at the first entry whose
+// interval overlaps span.
+func (m *Map[I, K, V]) Overlaps(span Span[K]) OverlapIterator[I, K, V] {
+	return newOverlapIterator[I, K, V](m.a(), span)
+}
+
 // Overlapping returns an iterator over the entries whose intervals overlap
-// bounds, in order of their start keys.
-func (m *Map[I, K, V]) Overlapping(bounds I) iter.Seq2[I, V] {
+// span, in order of their start keys.
+func (m *Map[I, K, V]) Overlapping(span Span[K]) iter.Seq2[I, V] {
 	return func(yield func(I, V) bool) {
-		it := m.Iterator()
-		for it.FirstOverlap(bounds); it.Valid(); it.NextOverlap() {
+		for it := m.Overlaps(span); it.Valid(); it.Next() {
 			if !yield(it.Key(), it.Value()) {
 				return
 			}
@@ -190,9 +194,7 @@ func (m *Map[I, K, V]) String() string { return m.a().String() }
 func (m *Map[I, K, V]) Verify() error { return m.a().Verify() }
 
 // Iterator returns a new iterator positioned before the first entry.
-func (m *Map[I, K, V]) Iterator() Iterator[I, K, V] {
-	return Iterator[I, K, V]{Iterator: m.a().Iterator()}
-}
+func (m *Map[I, K, V]) Iterator() Iterator[I, K, V] { return m.a().Iterator() }
 
 // Cursor returns a new cursor positioned before the first entry.
 func (m *Map[I, K, V]) Cursor() Cursor[I, K, V] { return m.a().Cursor() }
@@ -239,10 +241,16 @@ func NewSet[I, K any](b Bounds[I, K], opts ...aug.Option) *Set[I, K] {
 
 func (s *Set[I, K]) m() *Map[I, K, struct{}] { return (*Map[I, K, struct{}])(s) }
 
-// Overlapping returns an iterator over the items that overlap bounds, in
+// Overlaps returns an OverlapIterator positioned at the first item that
+// overlaps span.
+func (s *Set[I, K]) Overlaps(span Span[K]) OverlapIterator[I, K, struct{}] {
+	return s.m().Overlaps(span)
+}
+
+// Overlapping returns an iterator over the items that overlap span, in
 // order of their start keys.
-func (s *Set[I, K]) Overlapping(bounds I) iter.Seq[I] {
-	return keys(s.m().Overlapping(bounds))
+func (s *Set[I, K]) Overlapping(span Span[K]) iter.Seq[I] {
+	return keys(s.m().Overlapping(span))
 }
 
 // Clear removes all items, returning nodes no other set references to the

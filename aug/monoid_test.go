@@ -28,6 +28,7 @@ import (
 // maxOf is a Monoid (not a Group) tracking the largest value.
 type maxOf struct{}
 
+func (maxOf) Identity() int        { return 0 }
 func (maxOf) Of(_ int, v int) int  { return v }
 func (maxOf) Combine(a, b int) int { return max(a, b) }
 func (maxOf) Equal(a, b int) bool  { return a == b }
@@ -111,12 +112,15 @@ func testMonoidAggregates(t *testing.T, degree int) {
 		if got := it.Prefix(); got != (stats{}) {
 			t.Fatalf("Prefix after Reset = %v", got)
 		}
-		// SeekWhere by cumulative sum: first entry at which the running sum
+		// SeekPrefix by cumulative sum: first entry at which the running sum
 		// of values reaches a threshold.
 		total := statsOf(keys, ref, -1<<31, 1<<31).B.A
 		for range 10 {
 			threshold := rng.IntN(total + 2)
-			prefix := it.SeekWhere(func(p, c stats) bool { return p.B.A+c.B.A >= threshold })
+			prefix, ok := it.SeekPrefix(func(p stats) bool { return p.B.A >= threshold })
+			if ok != it.Valid() {
+				t.Fatalf("SeekPrefix reported %v but Valid is %v", ok, it.Valid())
+			}
 			running := 0
 			wantIdx := -1
 			for j, k := range keys {
@@ -128,18 +132,18 @@ func testMonoidAggregates(t *testing.T, degree int) {
 			}
 			if wantIdx == -1 {
 				if it.Valid() {
-					t.Fatalf("SeekWhere(sum >= %d) valid at %d, want past end", threshold, it.Key())
+					t.Fatalf("SeekPrefix(sum >= %d) valid at %d, want past end", threshold, it.Key())
 				}
 				if prefix != statsOf(keys, ref, -1<<31, 1<<31) {
-					t.Fatalf("SeekWhere past end returned prefix %v", prefix)
+					t.Fatalf("SeekPrefix past end returned prefix %v", prefix)
 				}
 				continue
 			}
 			if !it.Valid() || it.Key() != keys[wantIdx] {
-				t.Fatalf("SeekWhere(sum >= %d) = %v %d, want %d", threshold, it.Valid(), it.Key(), keys[wantIdx])
+				t.Fatalf("SeekPrefix(sum >= %d) = %v %d, want %d", threshold, it.Valid(), it.Key(), keys[wantIdx])
 			}
 			if want := statsOf(keys[:wantIdx], ref, -1<<31, 1<<31); prefix != want {
-				t.Fatalf("SeekWhere(sum >= %d) prefix %v, want %v", threshold, prefix, want)
+				t.Fatalf("SeekPrefix(sum >= %d) prefix %v, want %v", threshold, prefix, want)
 			}
 		}
 	}
@@ -202,7 +206,7 @@ func Example_customAugmentation() {
 	fmt.Println("pool 2:", pool2.A, "hosts,", pool2.B, "load")
 
 	it := m.Iterator()
-	it.SeekWhere(func(prefix, c load) bool { return prefix.B+c.B >= 200 })
+	it.SeekPrefix(func(p load) bool { return p.B >= 200 })
 	fmt.Println("cumulative load reaches 200 at", it.Key())
 	// Output:
 	// pool 2: 3 hosts, 150 load

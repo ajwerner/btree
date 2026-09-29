@@ -33,7 +33,7 @@ func TestBTree(t *testing.T) {
 	it.First()
 	expected := []int{1, 2, 12}
 	for _, exp := range expected {
-		if got := it.Key(); got != exp {
+		if got := it.Item(); got != exp {
 			t.Fatalf("expected %d, got %d", exp, got)
 		}
 		it.Next()
@@ -103,9 +103,10 @@ func checkMap(t *testing.T, tag string, m *Map[int, int], r *model, rng *rand.Ra
 			t.Fatalf("%s: Get(%d) = (%d, %v), want (%d, %v)", tag, k, v, ok, rv, rok)
 		}
 		idx, exists := slices.BinarySearch(keys, k)
-		if found := it.SeekGE(k); found != exists {
-			t.Fatalf("%s: SeekGE(%d) found=%v, want %v", tag, k, found, exists)
+		if found := it.SeekExact(k); found != exists {
+			t.Fatalf("%s: SeekExact(%d) found=%v, want %v", tag, k, found, exists)
 		}
+		it.SeekGE(k)
 		if idx < len(keys) {
 			if !it.Valid() || it.Key() != keys[idx] {
 				t.Fatalf("%s: SeekGE(%d) valid=%v cur=%d, want %d", tag, k, it.Valid(), it.Key(), keys[idx])
@@ -216,8 +217,8 @@ func testIteratorEdges(t *testing.T, degree, n int) {
 			}
 			return
 		}
-		if !it.Valid() || it.Key() != 0 {
-			t.Fatalf("n=%d: Next after reset gives %v %d", n, it.Valid(), it.Key())
+		if !it.Valid() || it.Item() != 0 {
+			t.Fatalf("n=%d: Next after reset gives %v %d", n, it.Valid(), it.Item())
 		}
 		// Next past the end stays invalid; Prev then yields the last key.
 		it.Last()
@@ -227,8 +228,8 @@ func testIteratorEdges(t *testing.T, degree, n int) {
 			t.Fatalf("n=%d: Next past end is valid", n)
 		}
 		it.Prev()
-		if !it.Valid() || it.Key() != n-1 {
-			t.Fatalf("n=%d: Prev after end gives %v %d", n, it.Valid(), it.Key())
+		if !it.Valid() || it.Item() != n-1 {
+			t.Fatalf("n=%d: Prev after end gives %v %d", n, it.Valid(), it.Item())
 		}
 		// Prev past the beginning stays invalid; Next then yields the first.
 		it.First()
@@ -238,8 +239,8 @@ func testIteratorEdges(t *testing.T, degree, n int) {
 			t.Fatalf("n=%d: Prev past beginning is valid", n)
 		}
 		it.Next()
-		if !it.Valid() || it.Key() != 0 {
-			t.Fatalf("n=%d: Next after beginning gives %v %d", n, it.Valid(), it.Key())
+		if !it.Valid() || it.Item() != 0 {
+			t.Fatalf("n=%d: Next after beginning gives %v %d", n, it.Valid(), it.Item())
 		}
 		// SeekGE past the end then Prev yields the last key.
 		it.SeekGE(n + 5)
@@ -247,8 +248,8 @@ func testIteratorEdges(t *testing.T, degree, n int) {
 			t.Fatalf("n=%d: SeekGE past end is valid", n)
 		}
 		it.Prev()
-		if !it.Valid() || it.Key() != n-1 {
-			t.Fatalf("n=%d: Prev after SeekGE past end gives %v %d", n, it.Valid(), it.Key())
+		if !it.Valid() || it.Item() != n-1 {
+			t.Fatalf("n=%d: Prev after SeekGE past end gives %v %d", n, it.Valid(), it.Item())
 		}
 		// SeekLT before the beginning then Next yields the first key.
 		it.SeekLT(0)
@@ -256,8 +257,8 @@ func testIteratorEdges(t *testing.T, degree, n int) {
 			t.Fatalf("n=%d: SeekLT before beginning is valid", n)
 		}
 		it.Next()
-		if !it.Valid() || it.Key() != 0 {
-			t.Fatalf("n=%d: Next after SeekLT before beginning gives %v %d", n, it.Valid(), it.Key())
+		if !it.Valid() || it.Item() != 0 {
+			t.Fatalf("n=%d: Next after SeekLT before beginning gives %v %d", n, it.Valid(), it.Item())
 		}
 	}
 }
@@ -350,4 +351,70 @@ func FuzzMap(f *testing.F) {
 			checkMap(t, "fuzz", trees[i].m, trees[i].r, rng)
 		}
 	})
+}
+
+// TestPositioningReportsValidity checks that every positioning method
+// reports whether the iterator is now at an entry, and that SeekExact is
+// the way to ask whether a key exists.
+func TestPositioningReportsValidity(t *testing.T) {
+	s := NewOrderedSet[int]()
+	s.Upsert(10)
+	it := s.Iterator()
+	for _, tc := range []struct {
+		name string
+		call func() bool
+	}{
+		{"SeekGT(10)", func() bool { return it.SeekGT(10) }},
+		{"SeekLT(10)", func() bool { return it.SeekLT(10) }},
+		{"SeekExact(9)", func() bool { return it.SeekExact(9) }},
+	} {
+		if got := tc.call(); got || (it.Valid() && tc.name != "SeekExact(9)") {
+			t.Fatalf("%s reported %v, valid %v; want false", tc.name, got, it.Valid())
+		}
+	}
+	for _, tc := range []struct {
+		name string
+		call func() bool
+	}{
+		{"SeekGT(9)", func() bool { return it.SeekGT(9) }},
+		{"SeekGE(10)", func() bool { return it.SeekGE(10) }},
+		{"SeekLE(11)", func() bool { return it.SeekLE(11) }},
+		{"SeekExact(10)", func() bool { return it.SeekExact(10) }},
+		{"First", it.First},
+		{"Last", it.Last},
+	} {
+		if got := tc.call(); !got || !it.Valid() || it.Item() != 10 {
+			t.Fatalf("%s reported %v, valid %v; want true, true", tc.name, got, it.Valid())
+		}
+	}
+	if it.Next() || it.Valid() {
+		t.Fatal("Next past the only entry reported true")
+	}
+	if !it.Prev() || it.Item() != 10 {
+		t.Fatal("Prev from past the end did not report the entry")
+	}
+	// The range-loop idiom.
+	m := NewOrdered[int, string]()
+	for i := range 10 {
+		m.Upsert(i, "")
+	}
+	mi := m.Iterator()
+	n := 0
+	for ok := mi.SeekGE(3); ok && mi.Key() < 7; ok = mi.Next() {
+		n++
+	}
+	if n != 4 {
+		t.Fatalf("range loop visited %d, want 4", n)
+	}
+	// Set.Get returns the stored representative of an equal probe.
+	type rec struct{ id, payload int }
+	byID := func(a, b rec) int { return cmp.Compare(a.id, b.id) }
+	rs := NewSet(byID)
+	rs.Upsert(rec{1, 100})
+	if got, ok := rs.Get(rec{1, 0}); !ok || got.payload != 100 {
+		t.Fatalf("Get = %v %v", got, ok)
+	}
+	if removed, ok := rs.Delete(rec{1, 0}); !ok || removed.payload != 100 {
+		t.Fatalf("Delete = %v %v", removed, ok)
+	}
 }

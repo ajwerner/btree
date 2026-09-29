@@ -14,7 +14,7 @@
 
 package aug
 
-func (t *Map[K, V, A]) monoid() Monoid[K, V, A] {
+func (t *Map[K, V, A]) monoid() CommutativeMonoid[K, V, A] {
 	if t.cfg.monoid == nil {
 		panic("aug: operation requires an Updater created by MonoidUpdater")
 	}
@@ -71,16 +71,15 @@ func (c *config[K, V, A]) foldBefore(acc A, n *Node[K, V, A], pos int, withChild
 }
 
 func (t *Map[K, V, A]) total() A {
-	t.monoid()
-	var zero A
+	m := t.monoid()
 	if t.root == nil {
-		return zero
+		return m.Identity()
 	}
 	return t.root.aug
 }
 
 func (t *Map[K, V, A]) prefix(k K) (prefix A, found bool) {
-	t.monoid()
+	prefix = t.monoid().Identity()
 	n := t.root
 	for n != nil {
 		i, found := n.find(&t.cfg, k)
@@ -98,16 +97,15 @@ func (t *Map[K, V, A]) prefix(k K) (prefix A, found bool) {
 
 func (t *Map[K, V, A]) aggregateRange(lo, hi K) A {
 	m := t.monoid()
-	var zero A
 	if t.root == nil || t.cfg.cmp(lo, hi) >= 0 {
-		return zero
+		return m.Identity()
 	}
 	return t.aggregate(m, t.root, &lo, &hi)
 }
 
 // aggregate folds the entries of the subtree at n with keys in [lo, hi),
 // where a nil bound is unconstrained.
-func (t *Map[K, V, A]) aggregate(m Monoid[K, V, A], n *Node[K, V, A], lo, hi *K) A {
+func (t *Map[K, V, A]) aggregate(m CommutativeMonoid[K, V, A], n *Node[K, V, A], lo, hi *K) A {
 	if lo == nil && hi == nil {
 		return n.aug
 	}
@@ -119,7 +117,7 @@ func (t *Map[K, V, A]) aggregate(m Monoid[K, V, A], n *Node[K, V, A], lo, hi *K)
 	if hi != nil {
 		j, _ = n.find(&t.cfg, *hi) // first entry >= hi
 	}
-	var acc A
+	acc := m.Identity()
 	if n.IsLeaf() {
 		return t.cfg.foldEntries(acc, n, i, j)
 	}
@@ -137,9 +135,8 @@ func (t *Map[K, V, A]) aggregate(m Monoid[K, V, A], n *Node[K, V, A], lo, hi *K)
 }
 
 func (i *Iterator[K, V, A]) prefix() A {
-	i.r.monoid()
 	c := &i.r.cfg
-	var p A
+	p := i.r.monoid().Identity()
 	// Ancestor frames contribute what lies left of the child through which
 	// the iterator descended; the current node contributes what lies left
 	// of its position, including the child at the position, whose entries
@@ -154,12 +151,12 @@ func (i *Iterator[K, V, A]) prefix() A {
 	return p
 }
 
-func (i *Iterator[K, V, A]) seekWhere(pred func(prefix, contribution A) bool) A {
+func (i *Iterator[K, V, A]) seekPrefix(pred func(inclusivePrefix A) bool) (A, bool) {
 	m := i.r.monoid()
 	i.Reset()
-	var p A
+	p := m.Identity()
 	if i.node == nil {
-		return p
+		return p, false
 	}
 	ll := i.lowLevel()
 	for {
@@ -170,28 +167,28 @@ func (i *Iterator[K, V, A]) seekWhere(pred func(prefix, contribution A) bool) A 
 		for ; pos <= count; pos++ {
 			if !leaf {
 				ca := n.children[pos].aug
-				if pred(p, ca) {
+				if pred(m.Combine(p, ca)) {
 					break
 				}
 				p = m.Combine(p, ca)
 			}
 			if pos < count {
 				oc := m.Of(n.keys[pos], n.values[pos])
-				if pred(p, oc) {
+				if pred(m.Combine(p, oc)) {
 					i.pos = int16(pos)
-					return p
+					return p, true
 				}
 				p = m.Combine(p, oc)
 			}
 		}
 		if pos > count {
-			// Nothing qualifies in this subtree; leave the iterator past
-			// the end and return the total, as documented.
+			// The predicate never became true; leave the iterator past the
+			// end with the total.
 			for i.s.len() > 0 {
 				ll.Ascend()
 			}
 			i.pos = i.node.Count()
-			return i.r.root.aug
+			return i.r.root.aug, false
 		}
 		i.pos = int16(pos)
 		ll.Descend()

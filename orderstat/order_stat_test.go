@@ -74,10 +74,10 @@ func TestOrderStatNth(t *testing.T) {
 	iter := tree.Iterator()
 	for _, idx := range perm {
 		iter.SeekNth(idx)
-		requireEqual(t, items[idx], iter.Key())
+		requireEqual(t, items[idx], iter.Item())
 		for i := idx + 1; i < N; i++ {
 			iter.Next()
-			requireEqual(t, items[i], iter.Key())
+			requireEqual(t, items[i], iter.Item())
 		}
 		requireEqual(t, true, iter.Valid())
 		iter.Next()
@@ -98,7 +98,7 @@ func Example_blog() {
 	fmt.Println(s.Len())
 	it := s.Iterator()
 	it.SeekNth(90)
-	fmt.Println(it.Key())
+	fmt.Println(it.Item())
 
 	// Output:
 	// 100
@@ -154,8 +154,8 @@ func testRankAndSeekNth(t *testing.T, degree int) {
 				idx = rng.IntN(n)
 			}
 			it.SeekNth(idx)
-			if !it.Valid() || it.Key() != keys[idx] {
-				t.Fatalf("n=%d h=%d: SeekNth(%d) = %v %d, want %d", n, height, idx, it.Valid(), it.Key(), keys[idx])
+			if !it.Valid() || it.Item() != keys[idx] {
+				t.Fatalf("n=%d h=%d: SeekNth(%d) = %v %d, want %d", n, height, idx, it.Valid(), it.Item(), keys[idx])
 			}
 			if r := it.Rank(); r != idx {
 				t.Fatalf("n=%d h=%d: Rank after SeekNth(%d) = %d", n, height, idx, r)

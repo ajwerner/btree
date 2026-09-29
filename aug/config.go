@@ -134,7 +134,7 @@ func (c *Config[K, V, A]) Compare(a, b K) int { return c.cmp(a, b) }
 type config[K, V, A any] struct {
 	Config[K, V, A]
 	find       func(*Node[K, V, A], K) (int, bool) // nil: binary search with cmp
-	monoid     Monoid[K, V, A]                     // set when Updater came from MonoidUpdater
+	monoid     CommutativeMonoid[K, V, A]          // set when Updater came from MonoidUpdater
 	folder     Folder[K, V, A]                     // set when the monoid implements Folder
 	fl         FreeList[K, V, A]
 	maxEntries int
@@ -197,9 +197,14 @@ func makeConfig[K, V, A any](
 	} else {
 		fl = NewFreeList[K, V, A](DefaultFreeListSize)
 	}
-	var m Monoid[K, V, A]
+	if cmp == nil {
+		panic("btree: a comparison function is required")
+	}
+	var m CommutativeMonoid[K, V, A]
 	var f Folder[K, V, A]
-	if mu, ok := up.(interface{ monoid() Monoid[K, V, A] }); ok {
+	if mu, ok := up.(interface {
+		monoid() CommutativeMonoid[K, V, A]
+	}); ok {
 		m = mu.monoid()
 		f, _ = m.(Folder[K, V, A])
 	}

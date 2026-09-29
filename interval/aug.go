@@ -33,6 +33,7 @@ func (u *updater[I, K, V]) Update(
 	md aug.UpdateInfo[I, V, subtreeBound[K]],
 ) (updated bool) {
 	a := n.Aug()
+	defer func() { n.SetAug(a) }() // a is modified below; store it on the way out
 	switch md.Action {
 	case aug.Insertion:
 		up := u.upperBound(md.RelevantKey)

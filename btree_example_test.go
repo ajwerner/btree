@@ -61,7 +61,7 @@ func ExampleMapCursor() {
 	c := fleet.Cursor()
 	for range 3 {
 		c.First()
-		h := c.Key()
+		h := c.Item()
 		h.load += 2
 		c.Rekey(h)
 		fmt.Println("charged", h.name, "to", h.load)

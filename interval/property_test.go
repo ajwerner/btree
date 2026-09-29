@@ -38,6 +38,14 @@ func (s span) String() string {
 	return fmt.Sprintf("[%d,%d)", s.lo, s.hi)
 }
 
+// toSpan is the query for a test span: a point when hi is not after lo.
+func toSpan(s span) interval.Span[int] {
+	if s.hi > s.lo {
+		return interval.HalfOpen(s.lo, s.hi)
+	}
+	return interval.Point(s.lo)
+}
+
 func spanBounds() interval.Bounds[span, int] {
 	b := interval.BoundsOf[span](cmp.Compare[int])
 	b.HasEnd = func(s span) bool { return s.hi > s.lo }
@@ -119,7 +127,7 @@ func testOverlapProperty(t *testing.T, degree int) {
 			}
 			slices.SortFunc(want, compareSpans)
 			var got []span
-			for s := range m.Overlapping(q) {
+			for s := range m.Overlapping(toSpan(q)) {
 				got = append(got, s)
 			}
 			if !slices.Equal(got, want) {
@@ -173,67 +181,38 @@ func testOverlapProperty(t *testing.T, degree int) {
 	check(m, ref)
 }
 
-// TestOverlapScanAfterSeek checks that a plain seek ends an overlap scan
-// in progress, so that a later NextOverlap does not continue with stale
-// constraints.
-func TestOverlapScanAfterSeek(t *testing.T) {
-	m := interval.NewSet(spanBounds())
-	for i := 0; i < 100; i += 2 {
-		m.Upsert(span{i, i + 3})
-	}
-	it := m.Iterator()
-	it.FirstOverlap(span{10, 12})
-	if !it.Valid() || it.Key() != (span{8, 11}) {
-		t.Fatalf("FirstOverlap at %v", it.Key())
-	}
-	it.SeekGE(span{50, 53})
-	if !it.Valid() || it.Key() != (span{50, 53}) {
-		t.Fatalf("SeekGE at %v", it.Key())
-	}
-	// With the scan ended, NextOverlap invalidates rather than scanning.
-	it.NextOverlap()
-	if it.Valid() {
-		t.Fatalf("NextOverlap after SeekGE is valid at %v", it.Key())
-	}
-	// And a fresh scan works.
-	var got []span
-	for it.FirstOverlap(span{50, 51}); it.Valid(); it.NextOverlap() {
-		got = append(got, it.Key())
-	}
-	if want := []span{{48, 51}, {50, 53}}; !slices.Equal(got, want) {
-		t.Fatalf("scan after seek: %v, want %v", got, want)
-	}
-}
-
-// TestOverlapScanEndsOnStep checks that Next and Prev end an overlap scan,
-// so NextOverlap afterwards does not apply stale constraints.
-func TestOverlapScanEndsOnStep(t *testing.T) {
+// TestOverlapIteratorIsIndependent checks that an OverlapIterator and a
+// plain Iterator on the same map do not disturb each other, and that an
+// empty or reversed query span overlaps nothing.
+func TestOverlapIteratorIsIndependent(t *testing.T) {
 	m := interval.NewSet(spanBounds())
 	for _, s := range []span{{0, 1}, {5, 6}, {10, 11}, {15, 16}} {
 		m.Upsert(s)
 	}
+	ov := m.Overlaps(interval.HalfOpen(10, 16))
+	if !ov.Valid() || ov.Key() != (span{10, 11}) {
+		t.Fatalf("Overlaps at %v", ov.Key())
+	}
 	it := m.Iterator()
-	it.FirstOverlap(span{10, 16})
-	if !it.Valid() || it.Key() != (span{10, 11}) {
-		t.Fatalf("FirstOverlap at %v", it.Key())
-	}
+	it.SeekGE(span{5, 6})
 	it.Prev()
-	it.Prev()
-	if !it.Valid() || it.Key() != (span{0, 1}) {
-		t.Fatalf("after two Prev at %v", it.Key())
-	}
-	it.NextOverlap()
-	if it.Valid() {
-		t.Fatalf("NextOverlap after Prev returned %v", it.Key())
-	}
-	it.FirstOverlap(span{10, 16})
 	it.Next()
-	if !it.Valid() || it.Key() != (span{15, 16}) {
-		t.Fatalf("Next after FirstOverlap at %v", it.Key())
+	if !ov.Next() || ov.Key() != (span{15, 16}) {
+		t.Fatalf("Next after plain iteration at valid=%v %v", ov.Valid(), ov.Key())
 	}
-	it.NextOverlap()
-	if it.Valid() {
-		t.Fatalf("NextOverlap after Next returned %v", it.Key())
+	if ov.Next() || ov.Valid() {
+		t.Fatalf("Next past the last overlap is valid at %v", ov.Key())
+	}
+	if !it.Valid() || it.Key() != (span{5, 6}) {
+		t.Fatalf("plain iterator disturbed: valid=%v %v", it.Valid(), it.Key())
+	}
+	for _, q := range []interval.Span[int]{interval.HalfOpen(5, 5), interval.HalfOpen(6, 5)} {
+		if e := m.Overlaps(q); e.Valid() {
+			t.Fatalf("empty span %v overlaps %v", q, e.Key())
+		}
+	}
+	if e := m.Overlaps(interval.Point(5)); !e.Valid() || e.Key() != (span{5, 6}) {
+		t.Fatalf("Point(5) = valid %v %v", e.Valid(), e.Key())
 	}
 }
 
@@ -263,7 +242,8 @@ func TestPointerEndpoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	n := 0
-	for range m.Overlapping(mk(-10, -8)) {
+	lo, hi := -10, -8
+	for range m.Overlapping(interval.HalfOpen(&lo, &hi)) {
 		n++
 	}
 	// Ranges starting at -12..-9 and points -10, -9.
@@ -286,7 +266,7 @@ func TestEmptyIntervalsArePoints(t *testing.T) {
 	m := interval.NewSet(b, aug.WithDegree(2))
 	m.Upsert(span{3, 3})
 	collect := func(q span) (got []span) {
-		for s := range m.Overlapping(q) {
+		for s := range m.Overlapping(toSpan(q)) {
 			got = append(got, s)
 		}
 		return got
@@ -335,7 +315,7 @@ func TestTieBreakCannotReorderStarts(t *testing.T) {
 		m.Upsert(s)
 	}
 	var got []span
-	for s := range m.Overlapping(span{6, 7}) {
+	for s := range m.Overlapping(interval.HalfOpen(6, 7)) {
 		got = append(got, s)
 	}
 	if want := []span{{0, 8}, {5, 20}}; !slices.Equal(got, want) {

@@ -15,11 +15,17 @@
 
 package aug
 
-// Iterator is responsible for search and traversal within a Map. It holds
-// the path from the root to its position, so it must not be copied once
-// positioned; take a fresh one from Map.Iterator instead. Reset, First,
-// Last, the Seek methods and SeekWhere position it from scratch and are safe
-// after any mutation of the Map; the other methods are not.
+// Iterator is responsible for search and traversal within a Map. Every
+// positioning method reports whether the Iterator is now at an entry, so
+// that
+//
+//	for ok := it.SeekGE(lo); ok && it.Compare(it.Key(), hi) < 0; ok = it.Next() {
+//
+// visits a key range. It holds the path from the root to its position, so
+// it must not be copied once positioned; take a fresh one from
+// Map.Iterator instead. Reset, First, Last and the Seek methods position it
+// from scratch and are safe after any mutation of the Map; the other
+// methods are not.
 type Iterator[K, V, A any] struct {
 	r *Map[K, V, A]
 	iterFrame[K, V, A]
@@ -42,10 +48,24 @@ func (i *Iterator[K, V, A]) Reset() {
 	i.s.reset()
 }
 
-// SeekGE seeks to the first key greater than or equal to the provided key
-// and reports whether that key is equal to it. If no such key exists the
-// Iterator is left past the end.
-func (i *Iterator[K, V, A]) SeekGE(key K) (found bool) {
+// SeekGE positions the Iterator at the first key greater than or equal to
+// key and reports whether there is one. If there is none the Iterator is
+// left past the end.
+func (i *Iterator[K, V, A]) SeekGE(key K) bool {
+	i.seekGE(key)
+	return i.Valid()
+}
+
+// SeekExact positions the Iterator at key and reports whether it exists.
+// If it does not, the Iterator is at the first greater key, or past the
+// end.
+func (i *Iterator[K, V, A]) SeekExact(key K) bool {
+	return i.seekGE(key)
+}
+
+// seekGE positions the Iterator at the first key >= key and reports
+// whether that key is equal to it.
+func (i *Iterator[K, V, A]) seekGE(key K) (found bool) {
 	i.Reset()
 	if i.node == nil {
 		return false
@@ -67,30 +87,30 @@ func (i *Iterator[K, V, A]) SeekGE(key K) (found bool) {
 	}
 }
 
-// SeekGT seeks to the first key greater than the provided key and reports
-// whether the provided key exists. If no such key exists the Iterator is
-// left past the end.
-func (i *Iterator[K, V, A]) SeekGT(key K) (found bool) {
-	if found = i.SeekGE(key); found {
-		i.Next()
+// SeekGT positions the Iterator at the first key greater than key and
+// reports whether there is one. If there is none the Iterator is left past
+// the end.
+func (i *Iterator[K, V, A]) SeekGT(key K) bool {
+	if i.seekGE(key) {
+		return i.Next()
 	}
-	return found
+	return i.Valid()
 }
 
-// SeekLE seeks to the last key less than or equal to the provided key and
-// reports whether that key is equal to it. If no such key exists the
-// Iterator is left before the beginning.
-func (i *Iterator[K, V, A]) SeekLE(key K) (found bool) {
-	if found = i.SeekGE(key); !found {
-		i.Prev()
+// SeekLE positions the Iterator at the last key less than or equal to key
+// and reports whether there is one. If there is none the Iterator is left
+// before the beginning.
+func (i *Iterator[K, V, A]) SeekLE(key K) bool {
+	if !i.seekGE(key) {
+		return i.Prev()
 	}
-	return found
+	return true
 }
 
-// SeekLT seeks to the last key less than the provided key and reports
-// whether the provided key exists. If no such key exists the Iterator is
-// left before the beginning.
-func (i *Iterator[K, V, A]) SeekLT(key K) (found bool) {
+// SeekLT positions the Iterator at the last key less than key and reports
+// whether there is one. If there is none the Iterator is left before the
+// beginning.
+func (i *Iterator[K, V, A]) SeekLT(key K) bool {
 	i.Reset()
 	if i.node == nil {
 		return false
@@ -100,18 +120,18 @@ func (i *Iterator[K, V, A]) SeekLT(key K) (found bool) {
 		pos, found := i.node.find(&i.r.cfg, key)
 		i.pos = int16(pos)
 		if found || i.node.IsLeaf() {
-			i.Prev()
-			return found
+			return i.Prev()
 		}
 		ll.Descend()
 	}
 }
 
-// First seeks to the first key in the Map.
-func (i *Iterator[K, V, A]) First() {
+// First positions the Iterator at the first key and reports whether there
+// is one.
+func (i *Iterator[K, V, A]) First() bool {
 	i.Reset()
 	if i.node == nil {
-		return
+		return false
 	}
 	ll := i.lowLevel()
 	i.pos = 0 // Reset leaves -1; Descend follows children[pos]
@@ -119,13 +139,15 @@ func (i *Iterator[K, V, A]) First() {
 		ll.Descend()
 	}
 	i.pos = 0
+	return i.Valid()
 }
 
-// Last seeks to the last key in the Map.
-func (i *Iterator[K, V, A]) Last() {
+// Last positions the Iterator at the last key and reports whether there is
+// one.
+func (i *Iterator[K, V, A]) Last() bool {
 	i.Reset()
 	if i.node == nil {
-		return
+		return false
 	}
 	ll := i.lowLevel()
 	for !i.node.IsLeaf() {
@@ -133,15 +155,16 @@ func (i *Iterator[K, V, A]) Last() {
 		ll.Descend()
 	}
 	i.pos = i.node.Count() - 1
+	return i.Valid()
 }
 
-// Next positions the Iterator to the key immediately following its current
-// position. If the Iterator is positioned before the first key (as after
-// Reset), Next positions it at the first key. If the Iterator is already
-// past the last key, Next leaves it there.
-func (i *Iterator[K, V, A]) Next() {
+// Next positions the Iterator at the key following its current position
+// and reports whether there is one. If the Iterator is before the first
+// key (as after Reset), Next positions it at the first key. If it is
+// already past the last key, Next leaves it there.
+func (i *Iterator[K, V, A]) Next() bool {
 	if i.node == nil {
-		return
+		return false
 	}
 	ll := i.lowLevel()
 	if i.node.IsLeaf() {
@@ -149,11 +172,11 @@ func (i *Iterator[K, V, A]) Next() {
 			i.pos++
 		}
 		i.settle()
-		return
+		return i.Valid()
 	}
 	if i.pos >= i.node.Count() {
 		// Past the end; stay there.
-		return
+		return false
 	}
 	i.pos++
 	ll.Descend()
@@ -162,6 +185,7 @@ func (i *Iterator[K, V, A]) Next() {
 		ll.Descend()
 	}
 	i.pos = 0
+	return true
 }
 
 // settle moves an iterator whose position ran off the end of a leaf up to
@@ -174,13 +198,13 @@ func (i *Iterator[K, V, A]) settle() {
 	}
 }
 
-// Prev positions the Iterator to the key immediately preceding its current
-// position. If the Iterator is positioned past the last key, Prev positions
-// it at the last key. If the Iterator is already before the first key (as
-// after Reset), Prev leaves it there.
-func (i *Iterator[K, V, A]) Prev() {
+// Prev positions the Iterator at the key preceding its current position
+// and reports whether there is one. If the Iterator is past the last key,
+// Prev positions it at the last key. If it is already before the first key
+// (as after Reset), Prev leaves it there.
+func (i *Iterator[K, V, A]) Prev() bool {
 	if i.node == nil {
-		return
+		return false
 	}
 	ll := i.lowLevel()
 	if i.node.IsLeaf() {
@@ -191,11 +215,11 @@ func (i *Iterator[K, V, A]) Prev() {
 			ll.Ascend()
 			i.pos--
 		}
-		return
+		return i.Valid()
 	}
 	if i.pos < 0 {
 		// Before the beginning; stay there.
-		return
+		return false
 	}
 	ll.Descend()
 	for !i.node.IsLeaf() {
@@ -203,6 +227,7 @@ func (i *Iterator[K, V, A]) Prev() {
 		ll.Descend()
 	}
 	i.pos = i.node.Count() - 1
+	return true
 }
 
 // Valid returns whether the Iterator is positioned at a valid position.

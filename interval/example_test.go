@@ -45,9 +45,8 @@ func Example() {
 	} {
 		m.Upsert(p)
 	}
-	it := m.Iterator()
-	for it.FirstOverlap(pair[int]{4, 5}); it.Valid(); it.NextOverlap() {
-		fmt.Println(it.Key())
+	for p := range m.Overlapping(interval.HalfOpen(4, 5)) {
+		fmt.Println(p)
 	}
 	// Output:
 	// [0 6]

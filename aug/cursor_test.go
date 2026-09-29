@@ -167,7 +167,7 @@ func testCursor(t *testing.T, degree int) {
 			k := rng.IntN(1200)
 			v := rng.IntN(1000)
 			pv, had := ref[k]
-			gotV, replaced := c.Upsert(k, v)
+			_, gotV, replaced := c.Upsert(k, v)
 			if replaced != had || (had && gotV != pv) {
 				t.Fatalf("step %d: Upsert(%d) = (%d, %v), want (%d, %v)", step, k, gotV, replaced, pv, had)
 			}
@@ -511,17 +511,17 @@ func TestCursorComparatorEquivalentKeys(t *testing.T) {
 				c.Upsert(wkey{id, w}, v) // hinted; in place when the leaf allows
 				ref[id] = entry{w, v}
 			case 2:
-				if c.SeekGE(wkey{id: id}) {
+				if c.SeekExact(wkey{id: id}) {
 					c.SetValue(v)
 					ref[id] = entry{ref[id].weight, v}
 				}
 			case 3:
-				if c.SeekGE(wkey{id: id}) {
+				if c.SeekExact(wkey{id: id}) {
 					c.Delete()
 					delete(ref, id)
 				}
 			case 4:
-				if c.SeekGE(wkey{id: id}) {
+				if c.SeekExact(wkey{id: id}) {
 					// Rekey to an equal key with a new weight: in place.
 					old := c.Key()
 					c.Rekey(wkey{id, w})

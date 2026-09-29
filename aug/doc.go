@@ -16,7 +16,24 @@
 // shared by the btree, orderstat and interval packages and is exported so
 // that users can define their own augmentations.
 //
-// # Ownership and concurrency
+// # Ownership
+//
+// The same contract holds for every collection in this module:
+//
+//   - New constructs a collection; its zero value is not usable, and it
+//     must not be copied by value.
+//   - Clone returns another collection that may be mutated independently
+//     of the original, in constant time; the two share nodes until one
+//     writes them.
+//   - Iterators and cursors borrow the collection they came from and
+//     observe it as it is when they are positioned; sequence views (All,
+//     Range, ...) observe it each time they are ranged over.
+//   - A mutation invalidates every borrowed position on that collection
+//     except the cursor performing it; positioning again is always safe.
+//   - Clear empties a collection and releases what it shared; the
+//     collection stays usable.
+//
+// # Concurrency
 //
 // A Map owns a reference to its root node; nodes are reference counted and
 // shared between a Map and its clones. A mutation copies each node on the
