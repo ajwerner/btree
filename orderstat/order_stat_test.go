@@ -17,6 +17,7 @@ package orderstat
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"slices"
 	"testing"
@@ -255,16 +256,14 @@ func TestOrderStatDifferential(t *testing.T) {
 			if len(clones) < 4 {
 				clones = append(clones, m.Clone())
 				cr := make(map[int]int, len(ref))
-				for k, v := range ref {
-					cr[k] = v
-				}
+				maps.Copy(cr, ref)
 				cloneRefs = append(cloneRefs, cr)
 			}
 		}
 		if step%2000 == 1999 {
 			check(m, ref)
 			for i := range clones {
-				for j := 0; j < 50; j++ {
+				for j := range 50 {
 					k := rng.IntN(30000)
 					clones[i].Upsert(k, -j)
 					cloneRefs[i][k] = -j

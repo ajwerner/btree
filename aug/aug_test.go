@@ -177,9 +177,7 @@ func TestConcurrentReadersOnSnapshot(t *testing.T) {
 	snap := m.Clone()
 	var wg sync.WaitGroup
 	for r := range 8 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			it := snap.Iterator()
 			n := 0
 			for it.First(); it.Valid(); it.Next() {
@@ -192,7 +190,7 @@ func TestConcurrentReadersOnSnapshot(t *testing.T) {
 			if n != 20000 {
 				t.Errorf("reader %d: saw %d items", r, n)
 			}
-		}()
+		})
 	}
 	// Meanwhile the writer keeps mutating its own tree, which shares nodes
 	// with the snapshot.

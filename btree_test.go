@@ -17,6 +17,7 @@ package btree
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"slices"
 	"testing"
@@ -58,9 +59,7 @@ func (r *model) sortedKeys() []int {
 
 func (r *model) clone() *model {
 	c := &model{m: make(map[int]int, len(r.m))}
-	for k, v := range r.m {
-		c.m[k] = v
-	}
+	maps.Copy(c.m, r.m)
 	return c
 }
 
@@ -96,7 +95,7 @@ func checkMap(t *testing.T, tag string, m *Map[int, int], r *model, rng *rand.Ra
 	if i != -1 {
 		t.Fatalf("%s: reverse walk stopped at %d", tag, i)
 	}
-	for j := 0; j < 64; j++ {
+	for range 64 {
 		k := rng.IntN(1200) - 100
 		v, ok := m.Get(k)
 		rv, rok := r.m[k]

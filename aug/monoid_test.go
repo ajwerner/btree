@@ -17,6 +17,7 @@ package aug_test
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"slices"
 	"testing"
@@ -156,9 +157,7 @@ func testMonoidAggregates(t *testing.T, degree int) {
 			if len(clones) < 3 {
 				clones = append(clones, m.Clone())
 				cr := make(map[int]int, len(ref))
-				for k, v := range ref {
-					cr[k] = v
-				}
+				maps.Copy(cr, ref)
 				cloneRefs = append(cloneRefs, cr)
 			}
 		}

@@ -17,6 +17,7 @@ package aug_test
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"slices"
 	"sync"
@@ -119,9 +120,7 @@ func testCursor(t *testing.T, degree int) {
 		case op < 10:
 			if len(snapshots) < 3 {
 				cr := make(map[int]int, len(ref))
-				for k, v := range ref {
-					cr[k] = v
-				}
+				maps.Copy(cr, ref)
 				snapshots = append(snapshots, snapshot{m.Clone(), cr})
 			}
 			// Cloning is a write to m; the cursor must be re-positioned.
@@ -362,9 +361,7 @@ func FuzzCursor(f *testing.F) {
 			case 7:
 				if len(snaps) < 3 {
 					cr := make(map[int]int, len(ref))
-					for k, v := range ref {
-						cr[k] = v
-					}
+					maps.Copy(cr, ref)
 					snaps = append(snaps, snapshot{m.Clone(), cr})
 					c.SeekGE(k)
 				}
@@ -411,9 +408,7 @@ func TestCursorWriterWithSnapshotReaders(t *testing.T) {
 	done := make(chan struct{})
 	var wg sync.WaitGroup
 	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for s := range snapshots {
 				prev := -1
 				n := 0
@@ -433,7 +428,7 @@ func TestCursorWriterWithSnapshotReaders(t *testing.T) {
 				}
 				s.Clear()
 			}
-		}()
+		})
 	}
 	go func() {
 		defer close(done)
