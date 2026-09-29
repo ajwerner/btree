@@ -28,9 +28,8 @@ const DefaultDegree = 16
 // heavier churn should size its own free list with WithFreeList.
 const DefaultFreeListSize = 256
 
-// Config is used to configure the tree. It consists of a comparison function
-// for keys and any auxiliary data provided by the instantiator. It is provided
-// on the iterator and passed to the augmentation's Update method.
+// Config holds a Map's comparison function and Updater. Augmentation code
+// reaches it through LowLevelIterator.Config.
 type Config[K, V, A any] struct {
 
 	// Updater is used to update the augmentations to the tree.
