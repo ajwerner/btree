@@ -205,11 +205,11 @@ func (i *Iterator[K, V, A]) Valid() bool {
 // Key returns the key at the Iterator's current position. It is illegal
 // to call Key if the Iterator is not valid.
 func (i *Iterator[K, V, A]) Key() K {
-	return i.node.entries[i.pos].k
+	return i.node.keys[i.pos]
 }
 
 // Value returns the value at the Iterator's current position. It is illegal
 // to call Value if the Iterator is not valid.
 func (i *Iterator[K, V, A]) Value() V {
-	return i.node.entries[i.pos].v
+	return i.node.values[i.pos]
 }

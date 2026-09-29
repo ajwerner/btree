@@ -90,13 +90,13 @@ func (t *Map[K, V, A]) Clone() *Map[K, V, A] {
 
 // Delete removes the item with the given key from the tree, returning it.
 func (t *Map[K, V, A]) Delete(k K) (removedK K, v V, found bool) {
-	if t.root == nil || len(t.root.entries) == 0 {
+	if t.root == nil || len(t.root.keys) == 0 {
 		return removedK, v, false
 	}
 	if removedK, v, found, _ = mut(&t.cfg, &t.root).remove(&t.cfg, k); found {
 		t.length--
 	}
-	if len(t.root.entries) == 0 {
+	if len(t.root.keys) == 0 {
 		old := t.root
 		if t.root.IsLeaf() {
 			t.root = nil
@@ -116,10 +116,11 @@ func (t *Map[K, V, A]) Delete(k K) (removedK K, v V, found bool) {
 func (t *Map[K, V, A]) Upsert(item K, value V) (replacedK K, replacedV V, replaced bool) {
 	if t.root == nil {
 		t.root = t.cfg.getLeaf()
-	} else if len(t.root.entries) >= t.cfg.maxEntries {
+	} else if len(t.root.keys) >= t.cfg.maxEntries {
 		splitK, splitV, splitNode := mut(&t.cfg, &t.root).split(&t.cfg, t.cfg.maxEntries/2)
 		newRoot := t.cfg.getInterior()
-		newRoot.entries = append(newRoot.entries, entry[K, V]{v: splitV, k: splitK})
+		newRoot.keys = append(newRoot.keys, splitK)
+		newRoot.values = append(newRoot.values, splitV)
 		newRoot.children = append(newRoot.children, t.root, splitNode)
 		newRoot.update(&t.cfg.Config)
 		t.root = newRoot
@@ -165,7 +166,7 @@ func (t *Map[K, V, A]) Get(k K) (v V, ok bool) {
 	for n != nil {
 		i, found := n.find(&t.cfg, k)
 		if found {
-			return n.entries[i].v, true
+			return n.values[i], true
 		}
 		if n.IsLeaf() {
 			break

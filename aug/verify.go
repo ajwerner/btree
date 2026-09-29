@@ -51,7 +51,7 @@ func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, h
 	if r := atomic.LoadInt32(&n.ref); r < 1 {
 		return fmt.Errorf("node at depth %d has ref %d", depth, r)
 	}
-	count := len(n.entries)
+	count := len(n.keys)
 	if count > v.cfg.maxEntries {
 		return fmt.Errorf("node at depth %d has count %d > %d", depth, count, v.cfg.maxEntries)
 	}
@@ -63,8 +63,8 @@ func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, h
 	}
 	cmp := v.cfg.cmp
 	for i := range count {
-		k := n.entries[i].k
-		if i > 0 && cmp(n.entries[i-1].k, k) >= 0 {
+		k := n.keys[i]
+		if i > 0 && cmp(n.keys[i-1], k) >= 0 {
 			return fmt.Errorf("node at depth %d keys out of order at %d", depth, i)
 		}
 		if lo != nil && cmp(*lo, k) >= 0 {
@@ -91,10 +91,10 @@ func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, h
 			}
 			clo, chi := lo, hi
 			if i > 0 {
-				clo = &n.entries[i-1].k
+				clo = &n.keys[i-1]
 			}
 			if i < count {
-				chi = &n.entries[i].k
+				chi = &n.keys[i]
 			}
 			if err := v.node(c, depth+1, false, clo, chi); err != nil {
 				return err
@@ -106,9 +106,14 @@ func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, h
 			}
 		}
 	}
-	for i, e := range n.entries[len(n.entries):cap(n.entries)] {
-		if !reflect.ValueOf(e).IsZero() {
-			return fmt.Errorf("node at depth %d has stale entry at %d", depth, len(n.entries)+i)
+	for i, k := range n.keys[len(n.keys):cap(n.keys)] {
+		if !reflect.ValueOf(k).IsZero() {
+			return fmt.Errorf("node at depth %d has stale key at %d", depth, len(n.keys)+i)
+		}
+	}
+	for i, v := range n.values[len(n.values):cap(n.values)] {
+		if !reflect.ValueOf(v).IsZero() {
+			return fmt.Errorf("node at depth %d has stale value at %d", depth, len(n.values)+i)
 		}
 	}
 	if v.cfg.Updater != nil {

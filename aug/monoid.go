@@ -109,7 +109,7 @@ func (u *countUpdater[K, V]) Update(n *Node[K, V, int], md UpdateInfo[K, V, int]
 		return false
 	default:
 		prev := *a
-		count := len(n.entries)
+		count := len(n.keys)
 		for _, c := range n.children {
 			count += c.aug
 		}
@@ -170,14 +170,14 @@ func (u *monoidUpdater[K, V, A]) Update(n *Node[K, V, A], md UpdateInfo[K, V, A]
 func (u *monoidUpdater[K, V, A]) recompute(n *Node[K, V, A]) A {
 	var acc A
 	leaf := n.IsLeaf()
-	for i, e := range n.entries {
+	for i, k := range n.keys {
 		if !leaf {
 			acc = u.m.Combine(acc, n.children[i].aug)
 		}
-		acc = u.m.Combine(acc, u.m.Of(e.k, e.v))
+		acc = u.m.Combine(acc, u.m.Of(k, n.values[i]))
 	}
 	if !leaf {
-		acc = u.m.Combine(acc, n.children[len(n.entries)].aug)
+		acc = u.m.Combine(acc, n.children[len(n.keys)].aug)
 	}
 	return acc
 }
@@ -225,7 +225,7 @@ func (s sum[K, V, N]) Equal(a, b N) bool  { return a == b }
 func (s sum[K, V, N]) FoldEntries(n *Node[K, V, N], lo, hi int) N {
 	var acc N
 	for i := lo; i < hi; i++ {
-		acc += s.f(n.entries[i].k, n.entries[i].v)
+		acc += s.f(n.keys[i], n.values[i])
 	}
 	return acc
 }

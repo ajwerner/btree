@@ -30,7 +30,7 @@ func (c *config[K, V, A]) foldEntries(acc A, n *Node[K, V, A], lo, hi int) A {
 		return c.monoid.Combine(acc, c.folder.FoldEntries(n, lo, hi))
 	}
 	for i := lo; i < hi; i++ {
-		acc = c.monoid.Combine(acc, c.monoid.Of(n.entries[i].k, n.entries[i].v))
+		acc = c.monoid.Combine(acc, c.monoid.Of(n.keys[i], n.values[i]))
 	}
 	return acc
 }
@@ -54,8 +54,8 @@ func (c *config[K, V, A]) foldChildren(acc A, n *Node[K, V, A], lo, hi int) A {
 // children and entries at indexes below pos and, when withChild is set and
 // n is not a leaf, the child at pos.
 func (c *config[K, V, A]) foldBefore(acc A, n *Node[K, V, A], pos int, withChild bool) A {
-	if pos > len(n.entries) {
-		pos = len(n.entries)
+	if pos > len(n.keys) {
+		pos = len(n.keys)
 	}
 	if pos < 0 {
 		return acc
@@ -119,7 +119,7 @@ func (t *Map[K, V, A]) aggregate(m Monoid[K, V, A], n *Node[K, V, A], lo, hi *K)
 	if lo == nil && hi == nil {
 		return n.aug
 	}
-	i, j := 0, len(n.entries)
+	i, j := 0, len(n.keys)
 	if lo != nil {
 		i, _ = n.find(&t.cfg, *lo) // first entry >= lo
 	}
@@ -185,7 +185,7 @@ func (i *Iterator[K, V, A]) SeekWhere(pred func(prefix, contribution A) bool) A 
 	for {
 		n := i.node
 		leaf := n.IsLeaf()
-		count := len(n.entries)
+		count := len(n.keys)
 		pos := 0
 		for ; pos <= count; pos++ {
 			if !leaf {
@@ -196,8 +196,7 @@ func (i *Iterator[K, V, A]) SeekWhere(pred func(prefix, contribution A) bool) A 
 				p = m.Combine(p, ca)
 			}
 			if pos < count {
-				e := &n.entries[pos]
-				oc := m.Of(e.k, e.v)
+				oc := m.Of(n.keys[pos], n.values[pos])
 				if pred(p, oc) {
 					i.pos = int16(pos)
 					return p

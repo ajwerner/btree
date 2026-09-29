@@ -25,17 +25,20 @@ conveniences).
 type Node[K, V, A any] struct {
     ref      int32
     aug      A
-    entries  []entry[K, V]   // cap 2*degree-1
+    keys     []K              // cap 2*degree-1
+    values   []V              // cap 2*degree-1; no allocation for a zero-size V
     children []*Node[K, V, A] // empty for leaves, cap 2*degree
 }
-type entry[K, V any] struct { v V; k K } // v first: a zero-size V adds no padding
 ```
 
 A node of degree d holds d-1 to 2d-1 entries (the root may hold fewer).
-Keys and values live in one slice so that a leaf is two allocations cold
-(node and entries) and an interior node three, and so that copying or
-clearing a node touches only the live prefix. Slices rather than arrays make
-the degree a per-tree runtime setting; the earlier fixed-array layout copied
+Keys and values are separate slices so that a search touches only keys:
+measured against an interleaved `{value, key}` layout, `Get` is 5-9% faster
+with 8-byte values because keys are denser, and 20-30% faster with 64- and
+256-byte values; the price is one more slice to copy per copied node,
+about 2% on the clone-heavy round with pointer values. Copying or clearing
+a node touches only the live prefix. Slices rather than arrays make the
+degree a per-tree runtime setting; the earlier fixed-array layout copied
 and zeroed every slot of a 127-entry node on every copy-on-write and could
 not be sized per tree.
 

@@ -59,42 +59,38 @@ func (t *Map[K, V, A]) From(lo K) iter.Seq2[K, V] {
 
 func (n *Node[K, V, A]) ascend(yield func(K, V) bool) bool {
 	if n.IsLeaf() {
-		for i := range n.entries {
-			e := &n.entries[i]
-			if !yield(e.k, e.v) {
+		for i, k := range n.keys {
+			if !yield(k, n.values[i]) {
 				return false
 			}
 		}
 		return true
 	}
-	for i := range n.entries {
+	for i, k := range n.keys {
 		if !n.children[i].ascend(yield) {
 			return false
 		}
-		e := &n.entries[i]
-		if !yield(e.k, e.v) {
+		if !yield(k, n.values[i]) {
 			return false
 		}
 	}
-	return n.children[len(n.entries)].ascend(yield)
+	return n.children[len(n.keys)].ascend(yield)
 }
 
 func (n *Node[K, V, A]) descend(yield func(K, V) bool) bool {
 	if n.IsLeaf() {
-		for i := len(n.entries) - 1; i >= 0; i-- {
-			e := &n.entries[i]
-			if !yield(e.k, e.v) {
+		for i := len(n.keys) - 1; i >= 0; i-- {
+			if !yield(n.keys[i], n.values[i]) {
 				return false
 			}
 		}
 		return true
 	}
-	if !n.children[len(n.entries)].descend(yield) {
+	if !n.children[len(n.keys)].descend(yield) {
 		return false
 	}
-	for i := len(n.entries) - 1; i >= 0; i-- {
-		e := &n.entries[i]
-		if !yield(e.k, e.v) {
+	for i := len(n.keys) - 1; i >= 0; i-- {
+		if !yield(n.keys[i], n.values[i]) {
 			return false
 		}
 		if !n.children[i].descend(yield) {
@@ -110,7 +106,7 @@ func (n *Node[K, V, A]) ascendRange(c *config[K, V, A], lo, hi *K, yield func(K,
 	if lo == nil && hi == nil {
 		return n.ascend(yield)
 	}
-	i, j := 0, len(n.entries)
+	i, j := 0, len(n.keys)
 	if lo != nil {
 		i, _ = n.find(c, *lo) // first entry >= lo
 	}
@@ -126,8 +122,7 @@ func (n *Node[K, V, A]) ascendRange(c *config[K, V, A], lo, hi *K, yield func(K,
 		return false
 	}
 	for k := i; k < j; k++ {
-		e := &n.entries[k]
-		if !yield(e.k, e.v) {
+		if !yield(n.keys[k], n.values[k]) {
 			return false
 		}
 		if !leaf && k+1 < j && !n.children[k+1].ascend(yield) {
@@ -149,8 +144,7 @@ func (t *Map[K, V, A]) Min() (k K, v V, ok bool) {
 	for !n.IsLeaf() {
 		n = n.children[0]
 	}
-	e := &n.entries[0]
-	return e.k, e.v, true
+	return n.keys[0], n.values[0], true
 }
 
 // Max returns the entry with the largest key.
@@ -160,8 +154,8 @@ func (t *Map[K, V, A]) Max() (k K, v V, ok bool) {
 		return k, v, false
 	}
 	for !n.IsLeaf() {
-		n = n.children[len(n.entries)]
+		n = n.children[len(n.keys)]
 	}
-	e := &n.entries[len(n.entries)-1]
-	return e.k, e.v, true
+	last := len(n.keys) - 1
+	return n.keys[last], n.values[last], true
 }

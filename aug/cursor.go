@@ -78,10 +78,10 @@ func (c *Cursor[K, V, A]) bounds() (lo, hi *K) {
 	for d := c.s.len() - 1; d >= 0 && (lo == nil || hi == nil); d-- {
 		f := c.s.at(d)
 		if lo == nil && f.pos > 0 {
-			lo = &f.node.entries[f.pos-1].k
+			lo = &f.node.keys[f.pos-1]
 		}
-		if hi == nil && int(f.pos) < len(f.node.entries) {
-			hi = &f.node.entries[f.pos].k
+		if hi == nil && int(f.pos) < len(f.node.keys) {
+			hi = &f.node.keys[f.pos]
 		}
 	}
 	return lo, hi
@@ -100,14 +100,14 @@ func (c *Cursor[K, V, A]) SetValue(v V) {
 		panic("aug: SetValue on an invalid Cursor")
 	}
 	c.pin()
-	e := &c.node.entries[c.pos]
-	prev := e.v
-	e.v = v
+	n := c.node
+	k, prev := n.keys[c.pos], n.values[c.pos]
+	n.values[c.pos] = v
 	c.updatePath(UpdateInfo[K, V, A]{
 		Action:        Replacement,
-		RelevantKey:   e.k,
+		RelevantKey:   k,
 		RelevantValue: v,
-		PrevKey:       e.k,
+		PrevKey:       k,
 		PrevValue:     prev,
 	})
 }
@@ -122,12 +122,12 @@ func (c *Cursor[K, V, A]) Delete() (K, V) {
 	t := c.r
 	n := c.node
 	// In place: a leaf that stays at or above the minimum, or the root leaf.
-	if n.IsLeaf() && (len(n.entries) > t.cfg.minEntries || c.s.len() == 0) {
+	if n.IsLeaf() && (len(n.keys) > t.cfg.minEntries || c.s.len() == 0) {
 		c.pin()
 		n = c.node
 		k, v, _ := n.removeAt(int(c.pos))
 		t.length--
-		if len(n.entries) == 0 {
+		if len(n.keys) == 0 {
 			// The root leaf is now empty.
 			t.root = nil
 			n.decRef(&t.cfg, false /* recursive */)
@@ -160,22 +160,22 @@ func (c *Cursor[K, V, A]) Rekey(k K) {
 		// In place if k still sorts between the neighbours of the entry.
 		lo, hi := c.bounds()
 		if c.pos > 0 {
-			lo = &n.entries[c.pos-1].k
+			lo = &n.keys[c.pos-1]
 		}
-		if int(c.pos)+1 < len(n.entries) {
-			hi = &n.entries[c.pos+1].k
+		if int(c.pos)+1 < len(n.keys) {
+			hi = &n.keys[c.pos+1]
 		}
 		if c.within(k, lo, hi) {
 			c.pin()
-			e := &c.node.entries[c.pos]
-			prev := e.k
-			e.k = k
+			n := c.node
+			prev, v := n.keys[c.pos], n.values[c.pos]
+			n.keys[c.pos] = k
 			c.updatePath(UpdateInfo[K, V, A]{
 				Action:        Replacement,
 				RelevantKey:   k,
-				RelevantValue: e.v,
+				RelevantValue: v,
 				PrevKey:       prev,
-				PrevValue:     e.v,
+				PrevValue:     v,
 			})
 			return
 		}
@@ -192,16 +192,15 @@ func (c *Cursor[K, V, A]) Rekey(k K) {
 func (c *Cursor[K, V, A]) Upsert(k K, v V) (replacedV V, replaced bool) {
 	t := c.r
 	n := c.node
-	if n != nil && n.IsLeaf() && len(n.entries) < t.cfg.maxEntries {
+	if n != nil && n.IsLeaf() && len(n.keys) < t.cfg.maxEntries {
 		if lo, hi := c.bounds(); c.within(k, lo, hi) {
 			i, found := n.find(&t.cfg, k)
 			c.pin()
 			n = c.node
 			c.pos = int16(i)
 			if found {
-				e := &n.entries[i]
-				replacedV = e.v
-				e.v = v
+				replacedV = n.values[i]
+				n.values[i] = v
 				c.updatePath(UpdateInfo[K, V, A]{
 					Action:        Replacement,
 					RelevantKey:   k,
