@@ -1,9 +1,8 @@
 # Changelog
 
-## Unreleased (branch `harden`, from `1cedbd5`)
+## v0.2.0 (2026-09-29)
 
-A rewrite of the core with the same design. Every change below is on
-`harden`; `main` is untouched.
+A rewrite of the core with the same design (PR #3, from `1cedbd5`).
 
 ### Fixed
 
