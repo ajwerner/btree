@@ -84,11 +84,6 @@ func (up *updater[I, K, V]) upperBound(interval I) keyBound[K] {
 	return keyBound[K]{k: up.end(interval)}
 }
 
-func isZero[K any](cmp func(K, K) int, k K) bool {
-	var z K
-	return cmp(k, z) == 0
-}
-
 func (up *updater[I, K, V]) findUpperBound(n *aug.Node[I, V, subtreeBound[K]]) keyBound[K] {
 	var max keyBound[K]
 	var setMax bool

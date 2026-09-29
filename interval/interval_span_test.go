@@ -19,11 +19,10 @@ import (
 	"bytes"
 	"cmp"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ajwerner/btree/aug"
 )
@@ -96,9 +95,16 @@ func spanWithMemo(i int, memo map[int]Span) Span {
 	return s
 }
 
+// newRNG returns a generator with a random, logged seed.
+func newRNG(tb testing.TB) *rand.Rand {
+	seed := rand.Uint64()
+	tb.Logf("seed %d", seed)
+	return rand.New(rand.NewPCG(seed, 0))
+}
+
 func randomSpan(rng *rand.Rand, n int) Span {
-	start := rng.Intn(n)
-	end := rng.Intn(n + 1)
+	start := rng.IntN(n)
+	end := rng.IntN(n + 1)
 	if end < start {
 		start, end = end, start
 	}
@@ -126,8 +132,8 @@ func (l *latch) End() Key {
 }
 
 func (sp Span) Equal(other Span) bool {
-	if bytes.Compare(sp.key, other.key) == 0 {
-		return bytes.Compare(sp.endKey, other.endKey) == 0
+	if bytes.Equal(sp.key, other.key) {
+		return bytes.Equal(sp.endKey, other.endKey)
 	}
 	return false
 }
@@ -367,7 +373,7 @@ func TestBTreeSeekOverlap(t *testing.T) {
 }
 
 func TestBTreeSeekOverlapRandom(t *testing.T) {
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := newRNG(t)
 
 	const trials = 10
 	for range trials {
@@ -378,7 +384,7 @@ func TestBTreeSeekOverlapRandom(t *testing.T) {
 		latchSpans := make([]int, count)
 		for j := range count {
 			var la *latch
-			end := rng.Intn(count + 10)
+			end := rng.IntN(count + 10)
 			if end <= j {
 				end = j
 				la = newLatch(spanWithEnd(j, end))
@@ -393,8 +399,8 @@ func TestBTreeSeekOverlapRandom(t *testing.T) {
 		const scanTrials = 100
 		for range scanTrials {
 			var scanLa *latch
-			scanStart := rng.Intn(count)
-			scanEnd := rng.Intn(count + 10)
+			scanStart := rng.IntN(count)
+			scanEnd := rng.IntN(count + 10)
 			if scanEnd <= scanStart {
 				scanEnd = scanStart
 				scanLa = newLatch(spanWithEnd(scanStart, scanEnd))
@@ -646,13 +652,13 @@ func BenchmarkBTreeIterSeekGE(b *testing.B) {
 			tr.Upsert(newLatch(s), struct{}{})
 		}
 
-		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		rng := newRNG(b)
 		it := tr.Iterator()
 
 		var l latch
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			s := spans[rng.Intn(len(spans))]
+			s := spans[rng.IntN(len(spans))]
 			l.span = s
 			it.SeekGE(&l)
 			if testing.Verbose() {
@@ -678,13 +684,13 @@ func BenchmarkBTreeIterSeekLT(b *testing.B) {
 			tr.Upsert(newLatch(s), struct{}{})
 		}
 
-		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		rng := newRNG(b)
 		it := tr.Iterator()
 
 		var l latch
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			j := rng.Intn(len(spans))
+			j := rng.IntN(len(spans))
 			s := spans[j]
 			l.span = s
 			it.SeekLT(&l)
@@ -721,12 +727,12 @@ func BenchmarkBTreeIterFirstOverlap(b *testing.B) {
 			tr.Upsert(la, struct{}{})
 		}
 
-		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		rng := newRNG(b)
 		it := tr.Iterator()
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			j := rng.Intn(len(spans))
+			j := rng.IntN(len(spans))
 			s := spans[j]
 			la := latches[j]
 			it.FirstOverlap(la)
@@ -805,7 +811,7 @@ func BenchmarkBTreeIterNextOverlap(b *testing.B) {
 
 func BenchmarkBTreeIterOverlapScan(b *testing.B) {
 	tr := makeBTree()
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := newRNG(b)
 
 	const count = 8 << 10
 	const size = 2 * maxEntries
