@@ -62,10 +62,10 @@ func TestIntervalTree(t *testing.T) {
 		}
 	}
 	tree := New[IntInterval, int, struct{}](Bounds[IntInterval, int]{
-		Compare:          cmp.Compare[int],
-		Key:              IntInterval.Key,
-		End:              IntInterval.End,
-		CompareIntervals: IntervalCompare[IntInterval](cmp.Compare[int]),
+		Compare:  cmp.Compare[int],
+		Key:      IntInterval.Key,
+		End:      IntInterval.End,
+		TieBreak: IntervalCompare[IntInterval](cmp.Compare[int]),
 	})
 	items := []IntInterval{{1, 4}, {2, 5}, {3, 3}, {3, 6}, {4, 7}}
 	for _, item := range items {

@@ -78,11 +78,18 @@ type keyBound[K any] struct {
 	inclusive bool
 }
 
+// upperBound is the bound on keys an interval covers: its end, exclusive,
+// or its start, inclusive, for a point. An interval whose end is not after
+// its start is a point, so that leaf matching and subtree pruning agree.
 func (up *updater[I, K, V]) upperBound(interval I) keyBound[K] {
+	k := up.key(interval)
 	if !up.hasEnd(interval) {
-		return keyBound[K]{k: up.key(interval), inclusive: true}
+		return keyBound[K]{k: k, inclusive: true}
 	}
-	return keyBound[K]{k: up.end(interval)}
+	if end := up.end(interval); up.cmp(end, k) > 0 {
+		return keyBound[K]{k: end}
+	}
+	return keyBound[K]{k: k, inclusive: true}
 }
 
 // findUpperBound recomputes the bound of n's subtree; ok is false for an

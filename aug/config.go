@@ -35,8 +35,9 @@ const MaxDegree = math.MaxInt16 / 2
 // heavier churn should size its own free list with WithFreeList.
 const DefaultFreeListSize = 256
 
-// Config holds a Map's comparison function and Updater. Augmentation code
-// reaches it through LowLevelIterator.Config.
+// Config holds a Map's comparison function and Updater, fixed at
+// construction. Augmentation code reaches a copy through
+// LowLevelIterator.Config.
 type Config[K, V, A any] struct {
 
 	// Updater is used to update the augmentations to the tree.
@@ -47,6 +48,18 @@ type Config[K, V, A any] struct {
 
 // Updater is used to update the augmentation of the node when the subtree
 // changes.
+//
+// The tree tells an Updater about every entry that enters, leaves or is
+// replaced below a node, and recomputes a node (Default) when it is
+// restructured: after a split, merge or rebalance the node whose children
+// changed shape receives Default, and if its augmentation changed the
+// ancestors hear of it through the event that caused the restructuring
+// or through Default. An augmentation that depends only on the entries
+// of the subtree (counts, sums, bounds) therefore needs the incremental
+// cases only; one that depends on the shape of the subtree (node counts,
+// heights) should recompute from its children on every event.
+//
+// An Updater may implement Equaler to give Verify its notion of equality.
 type Updater[K, V, A any] interface {
 
 	// Update should update the augmentation of the passed node, optionally

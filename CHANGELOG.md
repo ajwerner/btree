@@ -4,6 +4,15 @@
 
 ### Fixed
 
+- Splits, merges and rebalances now recompute the restructured node and
+  report the change upward, so augmentations that depend on the shape of
+  the subtree (node counts, heights) stay correct; deleting an absent key
+  that merges nodes is covered. The `Updater` documentation states what
+  an Updater is told.
+- Reference counts are 64-bit; clones dropped without `Clear` can no longer
+  wrap them.
+- An interval whose end is not after its start is a point, so leaf matching
+  and subtree pruning agree on it wherever it sits in the tree.
 - `Cursor.Upsert` replaced only the value when the key compared equal to
   an existing one; it now replaces the key too and reports the previous
   key to the Updater, so key-dependent augmentations stay correct.
@@ -19,6 +28,18 @@
 
 ### Changed
 
+- `interval.Bounds.CompareIntervals` is `TieBreak`, consulted only for
+  intervals with equal start keys: overlap searches need intervals ordered
+  by start, and the old field could order them any way.
+- `LowLevelIterator.Config` returns a copy; a Map's Updater and comparison
+  function are fixed at construction.
+- `Verify` compares augmentations with the Updater's `Equal` when it
+  implements `Equaler`; `MonoidUpdater` forwards the Monoid's.
+- `interval.Cursor`, `interval.FreeList` and `interval.NewFreeList` name
+  the types that were only reachable through inference.
+- The interval package documents its overlap cost as O(log n) plus the
+  ancestors of the k matches, up to O(k log(n/k)) when they are scattered,
+  rather than O(log n + k).
 - `SeekWhere` documents the contract its single descent needs: the
   predicate must be exact for spans, true for a span exactly when true for
   some entry of it.

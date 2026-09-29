@@ -28,7 +28,7 @@ import (
 // Keys and values are kept in separate slices so that searching a node
 // touches only keys, which matters when values are large.
 type Node[K, V, A any] struct {
-	ref      int32
+	ref      int64 // wide enough that clones dropped without Clear never wrap it
 	aug      A
 	keys     []K
 	values   []V
@@ -122,7 +122,7 @@ func mut[K, V, A any](
 	c *config[K, V, A],
 	n **Node[K, V, A],
 ) *Node[K, V, A] {
-	if atomic.LoadInt32(&(*n).ref) == 1 {
+	if atomic.LoadInt64(&(*n).ref) == 1 {
 		// Exclusive ownership. Can mutate in place.
 		return *n
 	}
@@ -140,7 +140,7 @@ func mut[K, V, A any](
 
 // incRef acquires a reference to the node.
 func (n *Node[K, V, A]) incRef() {
-	atomic.AddInt32(&n.ref, 1)
+	atomic.AddInt64(&n.ref, 1)
 }
 
 // decRef releases a reference to the node. If requested, the method
@@ -148,7 +148,7 @@ func (n *Node[K, V, A]) incRef() {
 func (n *Node[K, V, A]) decRef(
 	c *config[K, V, A], recursive bool,
 ) {
-	if atomic.AddInt32(&n.ref, -1) > 0 {
+	if atomic.AddInt64(&n.ref, -1) > 0 {
 		// Other references remain. Can't free.
 		return
 	}
@@ -420,15 +420,22 @@ func (n *Node[K, V, A]) insert(c *config[K, V, A], item K, value V) (replacedK K
 		n.insertAt(i, item, value, nil)
 		return replacedK, replacedV, false, n.updateOn(&c.Config, Insertion, item, value, nil)
 	}
+	// structural records whether splitting a child changed this node's
+	// augmentation. The entries below this node are unchanged by a split,
+	// so only an augmentation that depends on the shape of the subtree
+	// notices; it is reported upward alongside the insertion.
+	var structural bool
 	if len(n.children[i].keys) >= c.maxEntries {
 		splitK, splitV, splitNode := mut(c, &n.children[i]).split(c, c.maxEntries/2)
 		n.insertAt(i, splitK, splitV, splitNode)
+		structural = n.update(&c.Config)
 		if cmp := c.cmp(item, n.keys[i]); cmp < 0 {
 			// no change, we want first split node
 		} else if cmp > 0 {
 			i++ // we want second split node
 		} else {
-			return n.replaceAt(c, i, item, value)
+			replacedK, replacedV, replaced, changed = n.replaceAt(c, i, item, value)
+			return replacedK, replacedV, replaced, changed || structural
 		}
 	}
 	replacedK, replacedV, replaced, changed =
@@ -440,7 +447,7 @@ func (n *Node[K, V, A]) insert(c *config[K, V, A], item K, value V) (replacedK K
 			changed = n.updateOn(&c.Config, Insertion, item, value, nil)
 		}
 	}
-	return replacedK, replacedV, replaced, changed
+	return replacedK, replacedV, replaced, changed || structural
 }
 
 // replaceAt replaces the entry at index i, which has a key equal to item.
@@ -461,7 +468,9 @@ func (n *Node[K, V, A]) removeMax(c *config[K, V, A]) (K, V) {
 	// Recurse into max child.
 	i := len(n.keys)
 	if len(n.children[i].keys) <= c.minEntries {
-		// Child not large enough to remove from.
+		// Child not large enough to remove from. Ancestors always receive
+		// the Removal event, so a structural change here needs no separate
+		// report.
 		n.rebalanceOrMerge(c, i)
 		return n.removeMax(c) // redo
 	}
@@ -472,8 +481,10 @@ func (n *Node[K, V, A]) removeMax(c *config[K, V, A]) (K, V) {
 }
 
 // rebalanceOrMerge grows child 'i' to ensure it has sufficient room to remove
-// an item from it while keeping it at or above minEntries.
-func (n *Node[K, V, A]) rebalanceOrMerge(c *config[K, V, A], i int) {
+// an item from it while keeping it at or above minEntries. It reports
+// whether this node's augmentation changed as a result; the entries below
+// it did not, so only shape-dependent augmentations do.
+func (n *Node[K, V, A]) rebalanceOrMerge(c *config[K, V, A], i int) bool {
 	switch {
 	case i > 0 && len(n.children[i-1].keys) > c.minEntries:
 		// Rebalance from left sibling.
@@ -587,7 +598,7 @@ func (n *Node[K, V, A]) rebalanceOrMerge(c *config[K, V, A], i int) {
 			child.children = append(child.children, mergeChild.children...)
 		}
 		child.updateOn(&c.Config, Insertion, mergeK, mergeV, mergeChild)
-		if atomic.LoadInt32(&mergeChild.ref) == 1 {
+		if atomic.LoadInt64(&mergeChild.ref) == 1 {
 			// We own mergeChild exclusively, so its references to its
 			// children transfer to child. Drop them from mergeChild so
 			// that freeing it does not release them.
@@ -604,6 +615,7 @@ func (n *Node[K, V, A]) rebalanceOrMerge(c *config[K, V, A], i int) {
 			mergeChild.decRef(c, true /* recursive */)
 		}
 	}
+	return n.update(&c.Config)
 }
 
 // remove removes an item from the subtree rooted at this node. Returns the item
@@ -622,8 +634,9 @@ func (n *Node[K, V, A]) remove(
 	}
 	if len(n.children[i].keys) <= c.minEntries {
 		// Child not large enough to remove from.
-		n.rebalanceOrMerge(c, i)
-		return n.remove(c, item) // redo
+		structural := n.rebalanceOrMerge(c, i)
+		outK, outV, found, changed = n.remove(c, item) // redo
+		return outK, outV, found, changed || structural
 	}
 	child := mut(c, &n.children[i])
 	if found {
@@ -635,7 +648,12 @@ func (n *Node[K, V, A]) remove(
 	// Item is not in this node and child is large enough to remove from.
 	outK, outV, found, changed = child.remove(c, item)
 	if changed {
-		changed = n.updateOn(&c.Config, Removal, outK, outV, nil)
+		if found {
+			changed = n.updateOn(&c.Config, Removal, outK, outV, nil)
+		} else {
+			// Nothing was removed but the subtree was restructured.
+			changed = n.update(&c.Config)
+		}
 	}
 	return outK, outV, found, changed
 }

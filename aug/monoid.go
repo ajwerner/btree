@@ -14,6 +14,8 @@
 
 package aug
 
+import "reflect"
+
 // Monoid describes an augmentation that is the combination of per-entry
 // contributions: the augmentation of a subtree is Combine folded over Of of
 // every entry in it. The zero value of A must be the identity of Combine,
@@ -93,6 +95,9 @@ type countUpdater[K, V any] struct {
 
 func (u *countUpdater[K, V]) monoid() Monoid[K, V, int] { return u.m }
 
+// Equal compares counts.
+func (u *countUpdater[K, V]) Equal(a, b int) bool { return a == b }
+
 func (u *countUpdater[K, V]) Update(n *Node[K, V, int], md UpdateInfo[K, V, int]) bool {
 	a := n.Aug()
 	switch md.Action {
@@ -131,6 +136,15 @@ type monoidUpdater[K, V, A any] struct {
 }
 
 func (u *monoidUpdater[K, V, A]) monoid() Monoid[K, V, A] { return u.m }
+
+// Equal compares aggregates with the Monoid's Equaler, or reflect.DeepEqual
+// without one. Verify uses it.
+func (u *monoidUpdater[K, V, A]) Equal(a, b A) bool {
+	if u.eq != nil {
+		return u.eq.Equal(a, b)
+	}
+	return reflect.DeepEqual(a, b)
+}
 
 func (u *monoidUpdater[K, V, A]) Update(n *Node[K, V, A], md UpdateInfo[K, V, A]) bool {
 	a := n.Aug()

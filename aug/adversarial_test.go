@@ -16,6 +16,7 @@ package aug_test
 
 import (
 	"cmp"
+	"math"
 	"math/rand/v2"
 	"testing"
 
@@ -176,6 +177,81 @@ func TestVerifyInterfaceTypes(t *testing.T) {
 	}
 	for i := 0; i < 100; i += 3 {
 		m.Delete(i)
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// nodeCounter is a shape-dependent augmentation: the number of nodes in
+// the subtree. It recomputes from its children on every event, as the
+// Updater documentation prescribes for such augmentations.
+type nodeCounter[K, V any] struct{}
+
+func (nodeCounter[K, V]) Update(n *aug.Node[K, V, int], _ aug.UpdateInfo[K, V, int]) bool {
+	count := 1
+	if !n.IsLeaf() {
+		for i := int16(0); i <= n.Count(); i++ {
+			count += *n.ChildAug(i)
+		}
+	}
+	changed := *n.Aug() != count
+	*n.Aug() = count
+	return changed
+}
+
+// TestStructuralAugmentation checks that splits, merges and rebalances
+// reach ancestors' augmentations even when no entry below them changed,
+// including the merge caused by deleting a key that is absent.
+func TestStructuralAugmentation(t *testing.T) {
+	// The reviewer's example: degree 2, keys 1..6 leave the root at 3
+	// nodes instead of 4 when the split is not reported.
+	m := aug.New[int, int, int](cmp.Compare[int], nodeCounter[int, int]{}, aug.WithDegree(2))
+	for i := 1; i <= 6; i++ {
+		m.Upsert(i, i)
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+	for _, degree := range []int{2, 3} {
+		m := aug.New[int, int, int](cmp.Compare[int], nodeCounter[int, int]{}, aug.WithDegree(degree))
+		rng := rand.New(rand.NewPCG(31, 32))
+		for step := range 20000 {
+			k := rng.IntN(500)
+			switch rng.IntN(3) {
+			case 0, 1:
+				m.Upsert(k, step)
+			case 2:
+				m.Delete(rng.IntN(600)) // often absent, which can still merge
+			}
+			if step%500 == 499 {
+				if err := m.Verify(); err != nil {
+					t.Fatalf("degree %d step %d: %v", degree, step, err)
+				}
+			}
+		}
+	}
+}
+
+// maxFloat is a NaN-propagating maximum over non-negative floats whose
+// Equaler treats NaN as equal to itself, as cmp.Compare does, where
+// reflect.DeepEqual would not.
+type maxFloat struct{}
+
+func (maxFloat) Of(_ int, v float64) float64 { return v }
+func (maxFloat) Combine(a, b float64) float64 {
+	if math.IsNaN(a) || math.IsNaN(b) {
+		return math.NaN()
+	}
+	return max(a, b)
+}
+func (maxFloat) Equal(a, b float64) bool { return cmp.Compare(a, b) == 0 }
+
+func TestVerifyUsesEqualer(t *testing.T) {
+	m := aug.NewMonoid[int, float64, float64](cmp.Compare[int], maxFloat{}, aug.WithDegree(2))
+	nan := math.NaN()
+	for i := range 50 {
+		m.Upsert(i, nan)
 	}
 	if err := m.Verify(); err != nil {
 		t.Fatal(err)

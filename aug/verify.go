@@ -23,6 +23,9 @@ import (
 // Verify checks the structural invariants of the tree and returns an error
 // describing the first violation found. It is intended for tests. Like any
 // read, it must not run concurrently with a writer of this tree.
+// Augmentations are compared with the Updater's Equal method when it
+// implements Equaler (MonoidUpdater forwards the Monoid's), otherwise with
+// reflect.DeepEqual.
 func (t *Map[K, V, A]) Verify() error {
 	if t.root == nil {
 		if t.length != 0 {
@@ -54,7 +57,7 @@ type verifier[K, V, A any] struct {
 }
 
 func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, hi *K) error {
-	if r := atomic.LoadInt32(&n.ref); r < 1 {
+	if r := atomic.LoadInt64(&n.ref); r < 1 {
 		return fmt.Errorf("node at depth %d has ref %d", depth, r)
 	}
 	count := len(n.keys)
@@ -129,7 +132,11 @@ func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, h
 		// another goroutine.
 		tmp := Node[K, V, A]{aug: n.aug, keys: n.keys, values: n.values, children: n.children}
 		v.cfg.Updater.Update(&tmp, UpdateInfo[K, V, A]{})
-		if !reflect.DeepEqual(n.aug, tmp.aug) {
+		equal := reflect.DeepEqual(n.aug, tmp.aug)
+		if eq, ok := v.cfg.Updater.(Equaler[A]); ok {
+			equal = eq.Equal(n.aug, tmp.aug)
+		}
+		if !equal {
 			return fmt.Errorf("node at depth %d has stale augmentation %v, recomputed %v", depth, n.aug, tmp.aug)
 		}
 	}

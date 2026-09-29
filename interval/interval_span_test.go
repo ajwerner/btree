@@ -196,11 +196,11 @@ type btree = *Map[*latch, Key, struct{}]
 
 func makeBTree() btree {
 	return New[*latch, Key, struct{}](Bounds[*latch, Key]{
-		Compare:          Key.Compare,
-		Key:              func(l *latch) Key { return l.span.key },
-		End:              func(l *latch) Key { return l.span.endKey },
-		HasEnd:           func(l *latch) bool { return len(l.span.endKey) > 0 },
-		CompareIntervals: compareLatches,
+		Compare:  Key.Compare,
+		Key:      func(l *latch) Key { return l.span.key },
+		End:      func(l *latch) Key { return l.span.endKey },
+		HasEnd:   func(l *latch) bool { return len(l.span.endKey) > 0 },
+		TieBreak: compareLatches,
 	})
 }
 

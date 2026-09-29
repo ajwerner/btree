@@ -13,8 +13,16 @@
 // permissions and limitations under the License.
 
 // Package interval provides copy-on-write ordered maps and sets of
-// intervals whose iterators find every interval overlapping a query in
-// O(log n + k).
+// intervals whose iterators find every interval overlapping a query.
+//
+// Intervals are ordered by their start key; a query walks the tree
+// pruning subtrees whose largest end key precedes the query's start. That
+// visits O(log n) nodes plus the ancestors of the k matching intervals,
+// which is O(k) when matches are adjacent and up to O(k log(n/k)) when
+// they are scattered.
+//
+// An interval whose end is not after its start (or which has no end, see
+// Bounds.HasEnd) is a point containing only its start key.
 package interval
 
 import (
@@ -44,13 +52,17 @@ type Bounds[I, K any] struct {
 	End func(I) K
 
 	// HasEnd reports whether an interval has an end. It is optional: by
-	// default an interval whose End is the zero K has none.
+	// default an interval whose End is the zero K has none. An interval
+	// without an end, or whose end is not after its start, is a point.
 	HasEnd func(I) bool
 
-	// CompareIntervals orders intervals and so defines which intervals a
-	// Map treats as the same key. It is optional: by default intervals are
-	// ordered by Key, then points before ranges, then by End.
-	CompareIntervals func(I, I) int
+	// TieBreak orders intervals with equal start keys and so defines which
+	// intervals a Map treats as the same key. Overlap searches rely on
+	// intervals being ordered by start, so it is consulted only after the
+	// starts compare equal. It is optional: by default points sort before
+	// ranges, then ranges by End, and intervals equal by those are the same
+	// key.
+	TieBreak func(I, I) int
 }
 
 // Interval is implemented by interval types that expose their own bounds:
@@ -81,11 +93,8 @@ func (b Bounds[I, K]) withDefaults() Bounds[I, K] {
 			return b.Compare(b.End(i), zero) != 0
 		}
 	}
-	if b.CompareIntervals == nil {
-		b.CompareIntervals = func(x, y I) int {
-			if c := b.Compare(b.Key(x), b.Key(y)); c != 0 {
-				return c
-			}
+	if b.TieBreak == nil {
+		b.TieBreak = func(x, y I) int {
 			xEnd, yEnd := b.HasEnd(x), b.HasEnd(y)
 			switch {
 			case xEnd && yEnd:
@@ -102,12 +111,20 @@ func (b Bounds[I, K]) withDefaults() Bounds[I, K] {
 	return b
 }
 
+// compare orders intervals by start, then by TieBreak.
+func (b Bounds[I, K]) compare(x, y I) int {
+	if c := b.Compare(b.Key(x), b.Key(y)); c != 0 {
+		return c
+	}
+	return b.TieBreak(x, y)
+}
+
 // New constructs a Map over intervals described by b. See aug.WithDegree
 // and aug.WithFreeList for the options.
 func New[I, K, V any](b Bounds[I, K], opts ...aug.Option) *Map[I, K, V] {
 	b = b.withDefaults()
 	return (*Map[I, K, V])(aug.New[I, V, subtreeBound[K]](
-		b.CompareIntervals,
+		b.compare,
 		&updater[I, K, V]{
 			cmp:    b.Compare,
 			key:    b.Key,
@@ -178,7 +195,7 @@ func (m *Map[I, K, V]) Iterator() Iterator[I, K, V] {
 }
 
 // Cursor returns a new cursor positioned before the first entry.
-func (m *Map[I, K, V]) Cursor() aug.Cursor[I, V, subtreeBound[K]] { return m.a().Cursor() }
+func (m *Map[I, K, V]) Cursor() Cursor[I, K, V] { return m.a().Cursor() }
 
 // All returns an iterator over every entry in key order.
 func (m *Map[I, K, V]) All() iter.Seq2[I, V] { return m.a().All() }
@@ -197,6 +214,19 @@ func (m *Map[I, K, V]) Min() (k I, v V, ok bool) { return m.a().Min() }
 
 // Max returns the entry with the largest key.
 func (m *Map[I, K, V]) Max() (k I, v V, ok bool) { return m.a().Max() }
+
+// Cursor is a cursor over a Map; see aug.Cursor.
+type Cursor[I, K, V any] = aug.Cursor[I, V, subtreeBound[K]]
+
+// FreeList recycles nodes between interval Maps and Sets with the same
+// type parameters.
+type FreeList[I, K, V any] = aug.FreeList[I, V, subtreeBound[K]]
+
+// NewFreeList returns a FreeList that retains up to size nodes. See
+// aug.NewFreeList.
+func NewFreeList[I, K, V any](size int) FreeList[I, K, V] {
+	return aug.NewFreeList[I, V, subtreeBound[K]](size)
+}
 
 // Set is an ordered set of intervals of type I with bounds of type K whose
 // iterator provides efficient overlap queries.
@@ -262,7 +292,7 @@ func (s *Set[I, K]) Verify() error { return s.m().Verify() }
 func (s *Set[I, K]) Iterator() Iterator[I, K, struct{}] { return s.m().Iterator() }
 
 // Cursor returns a new cursor positioned before the first item.
-func (s *Set[I, K]) Cursor() aug.Cursor[I, struct{}, subtreeBound[K]] { return s.m().Cursor() }
+func (s *Set[I, K]) Cursor() Cursor[I, K, struct{}] { return s.m().Cursor() }
 
 // All returns an iterator over every item in order.
 func (s *Set[I, K]) All() iter.Seq[I] { return keys(s.m().All()) }

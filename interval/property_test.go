@@ -277,3 +277,68 @@ func TestPointerEndpoints(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestEmptyIntervalsArePoints checks that an interval whose end is not
+// after its start behaves as a point, wherever it sits in the tree.
+func TestEmptyIntervalsArePoints(t *testing.T) {
+	b := interval.BoundsOf[span](cmp.Compare[int])
+	b.HasEnd = func(span) bool { return true } // [3,3) claims an end
+	m := interval.NewSet(b, aug.WithDegree(2))
+	m.Upsert(span{3, 3})
+	collect := func(q span) (got []span) {
+		for s := range m.Overlapping(q) {
+			got = append(got, s)
+		}
+		return got
+	}
+	alone := collect(span{3, 4})
+	if !slices.Equal(alone, []span{{3, 3}}) {
+		t.Fatalf("alone in a leaf: %v", alone)
+	}
+	if got := collect(span{2, 3}); len(got) != 0 {
+		t.Fatalf("[2,3) should not cover the point 3: %v", got)
+	}
+	// Split the leaf many times over; the answer must not change.
+	for i := range 200 {
+		m.Upsert(span{i * 10, i*10 + 1})
+	}
+	if got := collect(span{3, 4}); !slices.Equal(got, []span{{0, 1}, {3, 3}}) && !slices.Equal(got, []span{{3, 3}}) {
+		t.Fatalf("after splits: %v", got)
+	}
+	found := false
+	for _, s := range collect(span{3, 4}) {
+		found = found || s == span{3, 3}
+	}
+	if !found {
+		t.Fatal("[3,3) lost after the leaf split")
+	}
+	// A reversed interval is also a point at its start.
+	m.Upsert(span{50, 40})
+	if got := collect(span{50, 51}); !slices.Contains(got, span{50, 40}) {
+		t.Fatalf("reversed interval not found as a point: %v", got)
+	}
+	if got := collect(span{41, 49}); slices.Contains(got, span{50, 40}) {
+		t.Fatalf("reversed interval matched inside its reversed range: %v", got)
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestTieBreakCannotReorderStarts checks that a tie-breaker preferring
+// ends cannot break the start ordering overlap searches rely on.
+func TestTieBreakCannotReorderStarts(t *testing.T) {
+	b := interval.BoundsOf[span](cmp.Compare[int])
+	b.TieBreak = func(a, c span) int { return cmp.Compare(a.hi, c.hi) }
+	m := interval.NewSet(b)
+	for _, s := range []span{{0, 8}, {10, 11}, {5, 20}} {
+		m.Upsert(s)
+	}
+	var got []span
+	for s := range m.Overlapping(span{6, 7}) {
+		got = append(got, s)
+	}
+	if want := []span{{0, 8}, {5, 20}}; !slices.Equal(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
