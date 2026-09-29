@@ -18,6 +18,8 @@
 package orderstat
 
 import (
+	"iter"
+
 	"github.com/ajwerner/btree/aug"
 )
 
@@ -113,6 +115,49 @@ func (t *Set[T]) Iterator() Iterator[T, struct{}] {
 // Cursor constructs a cursor for this set.
 func (t *Set[T]) Cursor() Cursor[T, struct{}] {
 	return (*Map[T, struct{}])(t).Cursor()
+}
+
+// All returns an iterator over every item in order.
+func (t *Set[T]) All() iter.Seq[T] {
+	return keys(t.Map.All())
+}
+
+// Backward returns an iterator over every item in reverse order.
+func (t *Set[T]) Backward() iter.Seq[T] {
+	return keys(t.Map.Backward())
+}
+
+// Range returns an iterator over the items in [lo, hi) in order.
+func (t *Set[T]) Range(lo, hi T) iter.Seq[T] {
+	return keys(t.Map.Range(lo, hi))
+}
+
+// From returns an iterator over the items greater than or equal to lo in
+// order.
+func (t *Set[T]) From(lo T) iter.Seq[T] {
+	return keys(t.Map.From(lo))
+}
+
+// Min returns the smallest item.
+func (t *Set[T]) Min() (item T, ok bool) {
+	item, _, ok = t.Map.Min()
+	return item, ok
+}
+
+// Max returns the largest item.
+func (t *Set[T]) Max() (item T, ok bool) {
+	item, _, ok = t.Map.Max()
+	return item, ok
+}
+
+func keys[T any](seq iter.Seq2[T, struct{}]) iter.Seq[T] {
+	return func(yield func(T) bool) {
+		for k := range seq {
+			if !yield(k) {
+				return
+			}
+		}
+	}
 }
 
 // Rank returns the number of items less than item, and whether item is in

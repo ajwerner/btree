@@ -17,8 +17,13 @@ it := snapshot.Iterator()
 for it.First(); it.Valid(); it.Next() {
 	fmt.Println(it.Cur(), it.Value())
 }
+for k, v := range snapshot.Range("a", "n") { // also All, Backward, From
+	fmt.Println(k, v)
+}
 snapshot.Clear() // returns nodes only this tree references to the free list
 ```
+
+The stateful `Iterator` and the range-over-func views cost about the same per entry when the loop body does real work; the iterator is the one to use for seeking and stepping, the views for whole-range walks.
 
 A `Cursor` is an iterator that can also mutate the entry it is on and stay valid: `SetValue`, `Delete` (leaves the cursor on the successor), `Rekey` (moves the entry to a new key) and a hinted `Upsert`. Each acts in place when the leaf allows it and otherwise falls back to the top-down algorithm plus a re-seek, so "seek, then move this entry" costs one descent instead of three.
 

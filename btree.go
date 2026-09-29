@@ -17,7 +17,11 @@
 // orderstat and interval packages for augmented variants.
 package btree
 
-import "github.com/ajwerner/btree/aug"
+import (
+	"iter"
+
+	"github.com/ajwerner/btree/aug"
+)
 
 // Map is an ordered map from K to V.
 type Map[K, V any] struct {
@@ -67,6 +71,49 @@ func (s *Set[T]) Delete(item T) (removed bool) {
 func (s *Set[T]) Contains(item T) bool {
 	_, ok := s.Map.Get(item)
 	return ok
+}
+
+// All returns an iterator over every item in order.
+func (s *Set[T]) All() iter.Seq[T] {
+	return keys(s.Map.All())
+}
+
+// Backward returns an iterator over every item in reverse order.
+func (s *Set[T]) Backward() iter.Seq[T] {
+	return keys(s.Map.Backward())
+}
+
+// Range returns an iterator over the items in [lo, hi) in order.
+func (s *Set[T]) Range(lo, hi T) iter.Seq[T] {
+	return keys(s.Map.Range(lo, hi))
+}
+
+// From returns an iterator over the items greater than or equal to lo in
+// order.
+func (s *Set[T]) From(lo T) iter.Seq[T] {
+	return keys(s.Map.From(lo))
+}
+
+// Min returns the smallest item.
+func (s *Set[T]) Min() (item T, ok bool) {
+	item, _, ok = s.Map.Min()
+	return item, ok
+}
+
+// Max returns the largest item.
+func (s *Set[T]) Max() (item T, ok bool) {
+	item, _, ok = s.Map.Max()
+	return item, ok
+}
+
+func keys[T any](seq iter.Seq2[T, struct{}]) iter.Seq[T] {
+	return func(yield func(T) bool) {
+		for k := range seq {
+			if !yield(k) {
+				return
+			}
+		}
+	}
 }
 
 // Option configures a Map or Set at construction.

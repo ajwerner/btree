@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/ajwerner/btree/aug"
@@ -300,5 +301,174 @@ func BenchmarkRekey(b *testing.B) {
 				i++
 			}
 		})
+	}
+}
+
+// FuzzCursor interprets the input as a script of cursor operations against
+// a model, with snapshots taken along the way.
+func FuzzCursor(f *testing.F) {
+	f.Add([]byte{1, 0, 5, 1, 7, 4, 9, 2, 3, 8, 1, 2, 6, 0})
+	f.Add([]byte{0})
+	f.Fuzz(func(t *testing.T, script []byte) {
+		if len(script) == 0 {
+			return
+		}
+		degree := 2 + int(script[0]%8)
+		script = script[1:]
+		m := newSumMap(degree)
+		ref := map[int]int{}
+		type snapshot struct {
+			m   *aug.Map[int, int, sumStats]
+			ref map[int]int
+		}
+		var snaps []snapshot
+		c := m.Cursor()
+		for i := 0; i+1 < len(script); i += 2 {
+			op, k := script[i]&7, int(script[i+1])
+			switch op {
+			case 0:
+				c.SeekGE(k)
+			case 1:
+				if c.Valid() {
+					c.SetValue(k)
+					ref[c.Cur()] = k
+				}
+			case 2:
+				if c.Valid() {
+					key, _ := c.Delete()
+					delete(ref, key)
+				}
+			case 3:
+				if c.Valid() {
+					old := c.Cur()
+					v := ref[old]
+					c.Rekey(k)
+					delete(ref, old)
+					ref[k] = v
+					if !c.Valid() || c.Cur() != k {
+						t.Fatalf("after Rekey(%d) cursor at valid=%v %d", k, c.Valid(), c.Cur())
+					}
+				}
+			case 4:
+				c.Upsert(k, i)
+				ref[k] = i
+				if !c.Valid() || c.Cur() != k {
+					t.Fatalf("after Upsert(%d) cursor at valid=%v %d", k, c.Valid(), c.Cur())
+				}
+			case 5:
+				c.Next()
+			case 6:
+				c.Prev()
+			case 7:
+				if len(snaps) < 3 {
+					cr := make(map[int]int, len(ref))
+					for k, v := range ref {
+						cr[k] = v
+					}
+					snaps = append(snaps, snapshot{m.Clone(), cr})
+					c.SeekGE(k)
+				}
+			}
+		}
+		verify := func(m *aug.Map[int, int, sumStats], ref map[int]int) {
+			t.Helper()
+			if err := m.Verify(); err != nil {
+				t.Fatal(err)
+			}
+			if m.Len() != len(ref) {
+				t.Fatalf("len %d, want %d", m.Len(), len(ref))
+			}
+			var want sumStats
+			for k, v := range ref {
+				got, ok := m.Get(k)
+				if !ok || got != v {
+					t.Fatalf("Get(%d) = (%d, %v), want %d", k, got, ok, v)
+				}
+				want.A++
+				want.B += v
+			}
+			if m.Total() != want {
+				t.Fatalf("Total %v, want %v", m.Total(), want)
+			}
+		}
+		verify(m, ref)
+		for _, s := range snaps {
+			verify(s.m, s.ref)
+			s.m.Clear()
+		}
+		verify(m, ref)
+	})
+}
+
+// TestCursorWriterWithSnapshotReaders runs a cursor-driven writer while
+// readers walk snapshots it hands out, under the race detector.
+func TestCursorWriterWithSnapshotReaders(t *testing.T) {
+	m := newSumMap(4)
+	for i := range 5000 {
+		m.Upsert(i, i)
+	}
+	snapshots := make(chan *aug.Map[int, int, sumStats], 8)
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for s := range snapshots {
+				prev := -1
+				n := 0
+				var sum int
+				for k, v := range s.All() {
+					if k <= prev {
+						t.Errorf("snapshot out of order at %d after %d", k, prev)
+						return
+					}
+					prev = k
+					n++
+					sum += v
+				}
+				if n != s.Len() || s.Total() != (sumStats{A: n, B: sum}) {
+					t.Errorf("snapshot inconsistent: %d items, total %v", n, s.Total())
+					return
+				}
+				s.Clear()
+			}
+		}()
+	}
+	go func() {
+		defer close(done)
+		rng := rand.New(rand.NewPCG(9, 9))
+		c := m.Cursor()
+		for step := range 20000 {
+			k := rng.IntN(6000)
+			switch rng.IntN(5) {
+			case 0:
+				c.SeekGE(k)
+			case 1:
+				if c.Valid() {
+					c.SetValue(step)
+				}
+			case 2:
+				if c.Valid() {
+					c.Delete()
+				}
+			case 3:
+				if c.Valid() {
+					c.Rekey(k)
+				}
+			case 4:
+				c.Upsert(k, step)
+			}
+			if step%250 == 0 {
+				snapshots <- m.Clone()
+				c.SeekGE(k)
+			}
+		}
+		close(snapshots)
+	}()
+	<-done
+	wg.Wait()
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
 	}
 }
