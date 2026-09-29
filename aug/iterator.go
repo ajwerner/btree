@@ -170,6 +170,9 @@ func (i *Iterator[K, V, A]) Next() bool {
 	if i.node.IsLeaf() {
 		if i.pos < i.node.Count() {
 			i.pos++
+			if i.pos < i.node.Count() {
+				return true
+			}
 		}
 		i.settle()
 		return i.pos < i.node.Count()

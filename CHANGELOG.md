@@ -18,10 +18,15 @@
   `Rekey` returns the entry it displaced at the destination.
 - interval: queries are `Span`s (`HalfOpen`, `Point`) instead of stored
   intervals; `Overlaps(span)` returns an `OverlapIterator` whose `Next` is
-  always the next overlap, and `Iterator` is a plain iterator with no
-  overlap mode. `Bounds.HasEnd` defaults to "every interval has an end;
-  one whose end is not after its start is a point" instead of the zero-end
-  convention.
+  always the next overlap and whose `Seek` restarts it for another query,
+  and `Iterator` is a plain iterator with no overlap mode. `Bounds.HasEnd`
+  defaults to "every interval has an end; one whose end is not after its
+  start is a point" instead of the zero-end convention, and the default
+  tie-break treats every representation of a point at a key as the same
+  item. `Bounds.CompareIntervals` is optional again as a single-call
+  comparator that must order by start, which `Verify` checks. `Set` has
+  `Get`, an item-returning `Delete`, `SetIterator`, `SetCursor` and
+  `SetOverlapIterator`.
 - aug: `Monoid`/`Group` are `CommutativeMonoid`/`CommutativeGroup` and
   require an `Identity` method; `SeekWhere(prefix, contribution)` is
   `SeekPrefix(inclusivePrefix)` with a predicate that turns true at most
@@ -33,11 +38,14 @@
 
 ### Fixed
 
-- Splits, merges and rebalances now recompute the restructured node and
-  report the change upward, so augmentations that depend on the shape of
-  the subtree (node counts, heights) stay correct; deleting an absent key
-  that merges nodes is covered. The `Updater` documentation states what
-  an Updater is told.
+- Splits, merges and rebalances are reported to Updaters that implement
+  the new `Restructurer` interface, so augmentations that depend on the
+  shape of the subtree (node counts, heights) can stay correct; deleting
+  an absent key that merges nodes is covered. Augmentations that depend
+  only on the entries pay nothing. The `Updater` documentation states
+  what an Updater is told.
+- Nodes start from the monoid's `Identity`, fresh and recycled, so a
+  monoid whose identity is not the zero value aggregates correctly.
 - Reference counts are 64-bit; clones dropped without `Clear` can no longer
   wrap them.
 - An interval whose end is not after its start is a point, so leaf matching
@@ -57,11 +65,12 @@
 
 ### Changed
 
-- `interval.Bounds.CompareIntervals` is `TieBreak`, consulted only for
-  intervals with equal start keys: overlap searches need intervals ordered
-  by start, and the old field could order them any way.
-- `LowLevelIterator.Config` returns a copy; a Map's Updater and comparison
-  function are fixed at construction.
+- `interval.Bounds.TieBreak` orders intervals with equal start keys; the
+  tree orders by start first. `CompareIntervals` remains for a
+  single-call comparator and must order by start.
+- `LowLevelIterator.Config` returns a copy and `Config.Compare` has a
+  value receiver; a Map's Updater and comparison function are fixed at
+  construction.
 - `Verify` compares augmentations with the Updater's `Equal` when it
   implements `Equaler`; `MonoidUpdater` forwards the Monoid's.
 - `interval.Cursor`, `interval.FreeList` and `interval.NewFreeList` name

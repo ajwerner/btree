@@ -35,6 +35,9 @@ func (u *updater[I, K, V]) Update(
 	a := n.Aug()
 	switch md.Action {
 	case aug.Insertion:
+		if n.IsLeaf() && md.ModifiedOther == nil {
+			u.validate(md.RelevantKey)
+		}
 		up := u.upperBound(md.RelevantKey)
 		if child := md.ModifiedOther; child != nil {
 			if up.compare(u.cmp, child.keyBound) < 0 {
@@ -66,7 +69,10 @@ func (u *updater[I, K, V]) Update(
 			return false
 		}
 		fallthrough
-	case aug.Default, aug.Replacement:
+	case aug.Replacement:
+		u.validate(md.RelevantKey)
+		fallthrough
+	case aug.Default:
 		prev, prevSet := a.keyBound, a.set
 		a.keyBound, a.set = u.findUpperBound(n)
 		n.SetAug(a)
@@ -85,13 +91,19 @@ type keyBound[K any] struct {
 // or its start, inclusive, for a point. An interval whose end is not after
 // its start is a point, so that leaf matching and subtree pruning agree.
 func (up *updater[I, K, V]) upperBound(interval I) keyBound[K] {
-	k := up.key(interval)
 	if up.hasEnd(interval) {
-		if end := up.end(interval); up.cmp(end, k) > 0 {
-			return keyBound[K]{k: end}
-		}
+		return keyBound[K]{k: up.end(interval)}
 	}
-	return keyBound[K]{k: k, inclusive: true}
+	return keyBound[K]{k: up.key(interval), inclusive: true}
+}
+
+// validate panics if a custom HasEnd claims an end that is not after the
+// start; the default HasEnd cannot. It is called once per inserted or
+// replaced interval, at the node holding it.
+func (up *updater[I, K, V]) validate(interval I) {
+	if up.hasEnd(interval) && up.cmp(up.end(interval), up.key(interval)) <= 0 {
+		panic("interval: an interval with an end must end after it starts; see Bounds.HasEnd")
+	}
 }
 
 // findUpperBound recomputes the bound of n's subtree; ok is false for an

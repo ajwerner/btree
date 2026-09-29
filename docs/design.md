@@ -90,14 +90,18 @@ spilled most of them to the GC.
 ## Augmentation
 
 Each node carries an `A`. An `Updater` is called with the node and an
-`UpdateInfo` after every structural change: `Insertion` and `Removal` of an
-entry below the node (with the moved subtree's aggregate on rebalances),
+`UpdateInfo` after every change to the entries below it: `Insertion` and
+`Removal` of an entry (with the moved subtree's aggregate on rebalances),
 `Split` (the node is the left half; the right half's aggregate is given),
 `Replacement` of an entry at its position (with an equal key, or, for an
 in-place `Cursor.Rekey`, a key that still sorts between the same
-neighbours), and `Default` (recompute from scratch). The return value says whether the node's aggregate changed and so
-whether ancestors need updating; the write paths stop propagating as soon
-as it is false.
+neighbours), and `Default` (recompute from scratch). The return value says
+whether the node's aggregate changed and so whether ancestors need updating;
+the write paths stop propagating as soon as it is false. A split, merge or
+rebalance leaves the entries below a node unchanged, so an augmentation
+that is a function of those entries needs nothing; one that depends on
+the shape of the subtree implements `Restructurer` and is called on the
+node whose children changed. Nodes start from the monoid's `Identity`.
 
 Most augmentations are commutative monoids (`CommutativeMonoid`: an
 `Identity`, `Of` and `Combine`): an aggregate is `Combine` folded over `Of`

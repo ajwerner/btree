@@ -41,7 +41,7 @@ Against google/btree v1.1.3 at equal degree, point operations (insert, get, dele
 
 ## Interval Trees
 
-The `interval` package provides interval trees for efficiently finding all intervals that overlap a query. Stored intervals are described by `Bounds` (how to read a start and end from your type); queries are `Span`s built with `HalfOpen(start, end)` or `Point(key)`, so asking about a range never requires building a stored object. `Overlaps(span)` returns an `OverlapIterator` whose `Next` always means the next overlap; `Overlapping(span)` is the range-over-func form.
+The `interval` package provides interval trees for efficiently finding all intervals that overlap a query. Stored intervals are described by `Bounds` (how to read a start and end from your type); queries are `Span`s built with `HalfOpen(start, end)` or `Point(key)`, so asking about a range never requires building a stored object. `Overlaps(span)` returns an `OverlapIterator` whose `Next` always means the next overlap and whose `Seek(span)` reuses it for the next query; `Overlapping(span)` is the range-over-func form.
 
 ## Order-Statistic Trees
 

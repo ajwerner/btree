@@ -262,51 +262,54 @@ func TestPointerEndpoints(t *testing.T) {
 	}
 }
 
-// TestEmptyIntervalsArePoints checks that an interval whose end is not
-// after its start behaves as a point, wherever it sits in the tree.
+// TestEmptyIntervalsArePoints checks that with the default HasEnd an
+// interval whose end is not after its start is a point wherever it sits in
+// the tree, and that a custom HasEnd claiming an end for such an interval
+// is rejected at insertion.
 func TestEmptyIntervalsArePoints(t *testing.T) {
-	b := interval.BoundsOf[span](cmp.Compare[int])
-	b.HasEnd = func(span) bool { return true } // [3,3) claims an end
-	m := interval.NewSet(b, aug.WithDegree(2))
+	m := interval.NewSet(interval.BoundsOf[span](cmp.Compare[int]), aug.WithDegree(2))
 	m.Upsert(span{3, 3})
-	collect := func(q span) (got []span) {
-		for s := range m.Overlapping(toSpan(q)) {
+	collect := func(q interval.Span[int]) (got []span) {
+		for s := range m.Overlapping(q) {
 			got = append(got, s)
 		}
 		return got
 	}
-	alone := collect(span{3, 4})
-	if !slices.Equal(alone, []span{{3, 3}}) {
-		t.Fatalf("alone in a leaf: %v", alone)
+	if got := collect(interval.HalfOpen(3, 4)); !slices.Equal(got, []span{{3, 3}}) {
+		t.Fatalf("alone in a leaf: %v", got)
 	}
-	if got := collect(span{2, 3}); len(got) != 0 {
+	if got := collect(interval.HalfOpen(2, 3)); len(got) != 0 {
 		t.Fatalf("[2,3) should not cover the point 3: %v", got)
 	}
 	// Split the leaf many times over; the answer must not change.
 	for i := range 200 {
 		m.Upsert(span{i * 10, i*10 + 1})
 	}
-	if got := collect(span{3, 4}); !slices.Equal(got, []span{{0, 1}, {3, 3}}) && !slices.Equal(got, []span{{3, 3}}) {
-		t.Fatalf("after splits: %v", got)
-	}
-	found := false
-	for _, s := range collect(span{3, 4}) {
-		found = found || s == span{3, 3}
-	}
-	if !found {
-		t.Fatal("[3,3) lost after the leaf split")
+	if got := collect(interval.HalfOpen(3, 4)); !slices.Contains(got, span{3, 3}) {
+		t.Fatalf("[3,3) lost after the leaf split: %v", got)
 	}
 	// A reversed interval is also a point at its start.
 	m.Upsert(span{50, 40})
-	if got := collect(span{50, 51}); !slices.Contains(got, span{50, 40}) {
+	if got := collect(interval.Point(50)); !slices.Contains(got, span{50, 40}) {
 		t.Fatalf("reversed interval not found as a point: %v", got)
 	}
-	if got := collect(span{41, 49}); slices.Contains(got, span{50, 40}) {
+	if got := collect(interval.HalfOpen(41, 49)); slices.Contains(got, span{50, 40}) {
 		t.Fatalf("reversed interval matched inside its reversed range: %v", got)
 	}
 	if err := m.Verify(); err != nil {
 		t.Fatal(err)
 	}
+	// A custom HasEnd that claims an end for an empty range is a bug the
+	// tree reports at insertion.
+	b := interval.BoundsOf[span](cmp.Compare[int])
+	b.HasEnd = func(span) bool { return true }
+	bad := interval.NewSet(b)
+	defer func() {
+		if recover() == nil {
+			t.Fatal("inserting [3,3) with HasEnd true did not panic")
+		}
+	}()
+	bad.Upsert(span{3, 3})
 }
 
 // TestTieBreakCannotReorderStarts checks that a tie-breaker preferring

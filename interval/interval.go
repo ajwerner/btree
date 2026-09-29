@@ -21,9 +21,9 @@
 // which is O(k) when matches are adjacent and up to O(k log(n/k)) when
 // they are scattered.
 //
-// A stored interval whose end is not after its start (or which has no
-// end, see Bounds.HasEnd) is a point containing only its start key.
-// Queries are Spans: HalfOpen(start, end) or Point(key).
+// A stored interval is a range [Key, End) or a point at Key; Bounds.HasEnd
+// tells them apart, and by default an interval whose End is not after its
+// Key is a point. Queries are Spans: HalfOpen(start, end) or Point(key).
 package interval
 
 import (
@@ -53,10 +53,13 @@ type Bounds[I, K any] struct {
 	// end (see HasEnd) is a point containing only its Key.
 	End func(I) K
 
-	// HasEnd reports whether an interval has an end. It is optional: by
-	// default every interval has one, and an interval whose End is not
-	// after its Key is a point containing only its Key. A type that marks
-	// points some other way (a nil end, a flag) provides HasEnd.
+	// HasEnd reports whether an interval has an end; one without an end is
+	// a point containing only its Key. It is optional: by default an
+	// interval has an end when its End is after its Key, so an empty or
+	// reversed range is a point. A type that marks points some other way
+	// (a nil end, a flag) provides HasEnd, which then saves a comparison
+	// per bound; an interval for which it returns true must end after it
+	// starts, and inserting one that does not panics.
 	HasEnd func(I) bool
 
 	// TieBreak orders intervals with equal start keys and so defines which
@@ -97,7 +100,7 @@ func (b Bounds[I, K]) withDefaults() Bounds[I, K] {
 		panic("interval: Bounds.Compare, Key and End are required")
 	}
 	if b.HasEnd == nil {
-		b.HasEnd = func(I) bool { return true }
+		b.HasEnd = func(i I) bool { return b.Compare(b.End(i), b.Key(i)) > 0 }
 	}
 	if b.TieBreak == nil {
 		b.TieBreak = func(x, y I) int {
@@ -125,10 +128,9 @@ func (b Bounds[I, K]) withDefaults() Bounds[I, K] {
 	return b
 }
 
-// isPoint reports whether an interval covers only its start key: it has no
-// end, or its end is not after its start.
+// isPoint reports whether an interval covers only its start key.
 func (b Bounds[I, K]) isPoint(i I) bool {
-	return !b.HasEnd(i) || b.Compare(b.End(i), b.Key(i)) <= 0
+	return !b.HasEnd(i)
 }
 
 // New constructs a Map over intervals described by b. See aug.WithDegree

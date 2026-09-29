@@ -62,6 +62,7 @@ type Iterator[I, K, V any] = aug.Iterator[I, V, subtreeBound[K]]
 // an Iterator does.
 type OverlapIterator[I, K, V any] struct {
 	it aug.Iterator[I, V, subtreeBound[K]]
+	u  *updater[I, K, V]
 	o  overlapScan[I, K, V]
 }
 
@@ -124,6 +125,7 @@ type overlapScan[I, K, V any] struct {
 
 func newOverlapIterator[I, K, V any](m *aug.Map[I, V, subtreeBound[K]], span Span[K]) OverlapIterator[I, K, V] {
 	i := OverlapIterator[I, K, V]{it: m.Iterator()}
+	i.u = aug.LowLevel(&i.it).Config().Updater.(*updater[I, K, V])
 	i.Seek(span)
 	return i
 }
@@ -149,9 +151,7 @@ func (i *OverlapIterator[I, K, V]) Seek(span Span[K]) bool {
 	return i.it.Valid()
 }
 
-func (i *OverlapIterator[I, K, V]) cfg() *updater[I, K, V] {
-	return aug.LowLevel(&i.it).Config().Updater.(*updater[I, K, V])
-}
+func (i *OverlapIterator[I, K, V]) cfg() *updater[I, K, V] { return i.u }
 
 // Valid reports whether the iterator is at an overlapping entry.
 func (i *OverlapIterator[I, K, V]) Valid() bool { return i.it.Valid() }
