@@ -120,8 +120,9 @@ func (t *Map[K, V, A]) aggregate(m Monoid[K, V, A], n *Node[K, V, A], lo, hi *K)
 		return n.aug
 	}
 	i, j := 0, len(n.keys)
+	var loFound bool
 	if lo != nil {
-		i, _ = n.find(&t.cfg, *lo) // first entry >= lo
+		i, loFound = n.find(&t.cfg, *lo) // first entry >= lo
 	}
 	if hi != nil {
 		j, _ = n.find(&t.cfg, *hi) // first entry >= hi
@@ -134,7 +135,10 @@ func (t *Map[K, V, A]) aggregate(m Monoid[K, V, A], n *Node[K, V, A], lo, hi *K)
 		// Both bounds fall within the same child.
 		return t.aggregate(m, n.children[i], lo, hi)
 	}
-	acc = t.aggregate(m, n.children[i], lo, nil)
+	if !loFound {
+		// Otherwise every key in children[i] is below lo.
+		acc = t.aggregate(m, n.children[i], lo, nil)
+	}
 	acc = t.cfg.foldEntries(acc, n, i, j)
 	acc = t.cfg.foldChildren(acc, n, i+1, j)
 	return m.Combine(acc, t.aggregate(m, n.children[j], nil, hi))

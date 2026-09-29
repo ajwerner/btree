@@ -137,9 +137,7 @@ func (c *Cursor[K, V, A]) Delete() (K, V) {
 		c.updatePath(UpdateInfo[K, V, A]{Action: Removal, RelevantKey: k, RelevantValue: v})
 		// The successor is at the same position, unless that runs off the
 		// leaf, in which case it is the separator in an ancestor.
-		for c.pos >= c.node.Count() && c.s.len() > 0 {
-			c.lowLevel().Ascend()
-		}
+		c.settle()
 		return k, v
 	}
 	k := c.Key()

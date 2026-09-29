@@ -35,12 +35,13 @@ type FreeList[K, V, A any] interface {
 // a mutex. It is the free list New uses by default, with
 // DefaultFreeListSize.
 func NewFreeList[K, V, A any](size int) FreeList[K, V, A] {
-	return &boundedFreeList[K, V, A]{nodes: make([]*Node[K, V, A], 0, size)}
+	return &boundedFreeList[K, V, A]{size: size}
 }
 
 type boundedFreeList[K, V, A any] struct {
 	mu    sync.Mutex
-	nodes []*Node[K, V, A]
+	size  int
+	nodes []*Node[K, V, A] // allocated on the first Put
 }
 
 func (f *boundedFreeList[K, V, A]) Get() *Node[K, V, A] {
@@ -59,8 +60,11 @@ func (f *boundedFreeList[K, V, A]) Get() *Node[K, V, A] {
 
 func (f *boundedFreeList[K, V, A]) Put(n *Node[K, V, A]) bool {
 	f.mu.Lock()
-	ok := len(f.nodes) < cap(f.nodes)
+	ok := len(f.nodes) < f.size
 	if ok {
+		if f.nodes == nil {
+			f.nodes = make([]*Node[K, V, A], 0, f.size)
+		}
 		f.nodes = append(f.nodes, n)
 	}
 	f.mu.Unlock()

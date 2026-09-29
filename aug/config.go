@@ -24,9 +24,9 @@ import (
 // the root.
 const DefaultDegree = 16
 
-// MaxDegree is the largest degree New accepts; positions within a node are
-// 16-bit.
-const MaxDegree = (math.MaxInt16 + 1) / 2
+// MaxDegree is the largest degree New accepts: positions within a node
+// are 16-bit, and traversals use one past the last entry as a sentinel.
+const MaxDegree = math.MaxInt16 / 2
 
 // DefaultFreeListSize is the capacity of the free list created by New when
 // WithFreeList is not given. A clone that is written to and then cleared

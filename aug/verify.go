@@ -21,9 +21,8 @@ import (
 )
 
 // Verify checks the structural invariants of the tree and returns an error
-// describing the first violation found. It is intended for tests. It is not
-// safe to call concurrently with writers to this tree or any tree sharing
-// nodes with it, because it briefly recomputes augmentations in place.
+// describing the first violation found. It is intended for tests. Like any
+// read, it must not run concurrently with a writer of this tree.
 func (t *Map[K, V, A]) Verify() error {
 	if t.root == nil {
 		if t.length != 0 {
@@ -124,12 +123,12 @@ func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, h
 		}
 	}
 	if v.cfg.Updater != nil {
-		saved := n.aug
-		v.cfg.Updater.Update(n, UpdateInfo[K, V, A]{})
-		recomputed := n.aug
-		n.aug = saved
-		if !reflect.DeepEqual(saved, recomputed) {
-			return fmt.Errorf("node at depth %d has stale augmentation %v, recomputed %v", depth, saved, recomputed)
+		// Recompute on a shallow copy so that nodes shared with snapshots
+		// being read elsewhere are never written.
+		tmp := *n
+		v.cfg.Updater.Update(&tmp, UpdateInfo[K, V, A]{})
+		if !reflect.DeepEqual(n.aug, tmp.aug) {
+			return fmt.Errorf("node at depth %d has stale augmentation %v, recomputed %v", depth, n.aug, tmp.aug)
 		}
 	}
 	return nil

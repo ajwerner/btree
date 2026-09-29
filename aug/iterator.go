@@ -110,11 +110,11 @@ func (i *Iterator[K, V, A]) SeekLT(key K) (found bool) {
 // First seeks to the first key in the Map.
 func (i *Iterator[K, V, A]) First() {
 	i.Reset()
-	i.pos = 0
 	if i.node == nil {
 		return
 	}
 	ll := i.lowLevel()
+	i.pos = 0 // Reset leaves -1; Descend follows children[pos]
 	for !i.node.IsLeaf() {
 		ll.Descend()
 	}
@@ -148,9 +148,7 @@ func (i *Iterator[K, V, A]) Next() {
 		if i.pos < i.node.Count() {
 			i.pos++
 		}
-		for i.pos >= i.node.Count() && i.s.len() > 0 {
-			ll.Ascend()
-		}
+		i.settle()
 		return
 	}
 	if i.pos >= i.node.Count() {
@@ -164,6 +162,16 @@ func (i *Iterator[K, V, A]) Next() {
 		ll.Descend()
 	}
 	i.pos = 0
+}
+
+// settle moves an iterator whose position ran off the end of a leaf up to
+// the separator that follows the leaf, or leaves it past the end at the
+// root when there is none.
+func (i *Iterator[K, V, A]) settle() {
+	ll := i.lowLevel()
+	for i.pos >= i.node.Count() && i.s.len() > 0 {
+		ll.Ascend()
+	}
 }
 
 // Prev positions the Iterator to the key immediately preceding its current

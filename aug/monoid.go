@@ -84,7 +84,9 @@ func MonoidUpdater[K, V, A any](m Monoid[K, V, A]) Updater[K, V, A] {
 	return u
 }
 
-// countUpdater is MonoidUpdater specialised for Count.
+// countUpdater is MonoidUpdater specialised for Count. It must agree with
+// monoidUpdater given Count; the aggregate tests exercise the generic path
+// with Count wrapped in PairOf and the orderstat tests exercise this one.
 type countUpdater[K, V any] struct {
 	m Count[K, V]
 }
@@ -205,19 +207,21 @@ func (Count[K, V]) FoldChildren(n *Node[K, V, int], lo, hi int) int {
 	return acc
 }
 
-// Number is the set of types Sum can add.
-type Number interface {
+// Integer is the set of types Sum can add. Floating-point sums are not
+// associative, let alone invertible, so they do not qualify as a Monoid;
+// sum floats as fixed-point integers, or implement Updater directly and
+// recompute nodes.
+type Integer interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 |
-		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
-		~float32 | ~float64
+		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
 }
 
 // Sum returns a Group summing f over entries.
-func Sum[K, V any, N Number](f func(K, V) N) Group[K, V, N] {
+func Sum[K, V any, N Integer](f func(K, V) N) Group[K, V, N] {
 	return sum[K, V, N]{f: f}
 }
 
-type sum[K, V any, N Number] struct {
+type sum[K, V any, N Integer] struct {
 	f func(K, V) N
 }
 

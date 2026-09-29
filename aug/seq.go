@@ -107,8 +107,9 @@ func (n *Node[K, V, A]) ascendRange(c *config[K, V, A], lo, hi *K, yield func(K,
 		return n.ascend(yield)
 	}
 	i, j := 0, len(n.keys)
+	var loFound bool
 	if lo != nil {
-		i, _ = n.find(c, *lo) // first entry >= lo
+		i, loFound = n.find(c, *lo) // first entry >= lo
 	}
 	if hi != nil {
 		j, _ = n.find(c, *hi) // first entry >= hi
@@ -118,7 +119,8 @@ func (n *Node[K, V, A]) ascendRange(c *config[K, V, A], lo, hi *K, yield func(K,
 		// Both bounds fall within the same child.
 		return n.children[i].ascendRange(c, lo, hi, yield)
 	}
-	if !leaf && !n.children[i].ascendRange(c, lo, nil, yield) {
+	// When lo is found at i every key in children[i] is below it.
+	if !leaf && !loFound && !n.children[i].ascendRange(c, lo, nil, yield) {
 		return false
 	}
 	for k := i; k < j; k++ {
