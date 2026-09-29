@@ -199,13 +199,16 @@ func (c *Cursor[K, V, A]) Upsert(k K, v V) (replacedV V, replaced bool) {
 			n = c.node
 			c.pos = int16(i)
 			if found {
+				// Replace the key as well as the value: it compares equal
+				// but need not be identical.
+				prevK := n.keys[i]
 				replacedV = n.values[i]
-				n.values[i] = v
+				n.keys[i], n.values[i] = k, v
 				c.updatePath(UpdateInfo[K, V, A]{
 					Action:        Replacement,
 					RelevantKey:   k,
 					RelevantValue: v,
-					PrevKey:       k,
+					PrevKey:       prevK,
 					PrevValue:     replacedV,
 				})
 				return replacedV, true

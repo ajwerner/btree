@@ -133,6 +133,18 @@ func (i *Iterator[I, K, V]) Last() {
 	i.Iterator.Last()
 }
 
+// Next steps to the next interval, ending any overlap scan.
+func (i *Iterator[I, K, V]) Next() {
+	i.o.reset()
+	i.Iterator.Next()
+}
+
+// Prev steps to the previous interval, ending any overlap scan.
+func (i *Iterator[I, K, V]) Prev() {
+	i.o.reset()
+	i.Iterator.Prev()
+}
+
 // SeekGE seeks to the first interval greater than or equal to the
 // provided one, ending any overlap scan.
 func (i *Iterator[I, K, V]) SeekGE(bounds I) bool {

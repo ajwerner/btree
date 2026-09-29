@@ -30,6 +30,16 @@
 // writes to the receiver, but the returned clone is independent and may be
 // used from another goroutine immediately.
 //
+// A Map must not be copied by value: a copy shares the root without holding
+// a reference to it, so clearing or writing either corrupts the other. Use
+// the pointer New returns, and Clone for a second handle.
+//
+// Keys, values and augmentations are copied shallowly when a node is
+// copied on write, so a map, its clones and their free-listed nodes may
+// share any references they contain. Treat a key or augmentation that
+// holds a reference as immutable once stored, and have Monoid operations
+// return fresh values rather than modify their arguments.
+//
 // Clear releases the Map's reference to its nodes. Nodes that no other Map
 // references are returned to the free list. A Map that is dropped without
 // Clear leaks nothing to the garbage collector's eyes, but nodes it shared

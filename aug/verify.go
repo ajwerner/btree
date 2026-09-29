@@ -123,9 +123,11 @@ func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, h
 		}
 	}
 	if v.cfg.Updater != nil {
-		// Recompute on a shallow copy so that nodes shared with snapshots
-		// being read elsewhere are never written.
-		tmp := *n
+		// Recompute on a copy so that nodes shared with snapshots being
+		// read elsewhere are never written. Copy only what the Updater
+		// reads: the reference count may be changing under an atomic in
+		// another goroutine.
+		tmp := Node[K, V, A]{aug: n.aug, keys: n.keys, values: n.values, children: n.children}
 		v.cfg.Updater.Update(&tmp, UpdateInfo[K, V, A]{})
 		if !reflect.DeepEqual(n.aug, tmp.aug) {
 			return fmt.Errorf("node at depth %d has stale augmentation %v, recomputed %v", depth, n.aug, tmp.aug)

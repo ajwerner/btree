@@ -88,12 +88,17 @@ func (i *MonoidIterator[K, V, A]) Prefix() A {
 // that prefix. If no entry qualifies the iterator is left past the end and
 // the total is returned.
 //
-// pred must be monotone: if pred(p, x) is false for the aggregate x of a
-// span, it must be false for (p', x') of every entry in the span, where p'
-// is the prefix of that entry. Predicates of the form "prefix combined with
-// x reaches a threshold" have this property, so SeekWhere implements
-// selection by rank (see orderstat) and by cumulative sum. It runs one
-// descent, calling pred and Combine once per child or entry visited.
+// The search descends once, into the first subtree whose aggregate
+// satisfies pred, and never backtracks, so pred must be exact for spans:
+// pred(p, x) for the aggregate x of a span, with p the prefix before the
+// span, must be true if and only if it is true for some entry of the span
+// with that entry's own prefix. Predicates of the form "prefix combined
+// with x reaches a threshold", with a threshold that the running prefix
+// crosses at most once, have this property; they implement selection by
+// rank (see orderstat) and by cumulative sum. A predicate that accepts a
+// span none of whose entries qualifies leaves the iterator past the end
+// without examining later spans. It calls pred and Combine once per child
+// or entry visited.
 func (i *MonoidIterator[K, V, A]) SeekWhere(pred func(prefix, contribution A) bool) A {
 	return i.Iterator.seekWhere(pred)
 }

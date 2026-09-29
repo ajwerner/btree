@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `Cursor.Upsert` replaced only the value when the key compared equal to
+  an existing one; it now replaces the key too and reports the previous
+  key to the Updater, so key-dependent augmentations stay correct.
+- The interval augmentation treated the zero endpoint as its initial
+  bound, which over-estimated bounds for negative endpoints and compared
+  the zero value with comparators that cannot take it (pointer endpoints
+  panicked). The bound now has an explicit unset state.
+- `Next` and `Prev` on an interval iterator end an overlap scan, as the
+  seeks already did, so `NextOverlap` after stepping does not apply stale
+  constraints.
+- `Verify` no longer copies a node's reference count non-atomically while
+  clones may be changing it.
+
+### Changed
+
+- `SeekWhere` documents the contract its single descent needs: the
+  predicate must be exact for spans, true for a span exactly when true for
+  some entry of it.
+- The `aug` documentation states that maps must not be copied by value and
+  that keys, values and augmentations are shallow-copied.
+
 ## v0.2.0 (2026-09-29)
 
 A rewrite of the core with the same design (PR #3, from `1cedbd5`).

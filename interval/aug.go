@@ -19,6 +19,7 @@ import "github.com/ajwerner/btree/aug"
 
 type subtreeBound[K any] struct {
 	keyBound[K]
+	set bool // false until the first entry; the zero K is not a bound
 }
 
 type updater[I, K, V any] struct {
@@ -40,8 +41,8 @@ func (u *updater[I, K, V]) Update(
 				up = child.keyBound
 			}
 		}
-		if a.compare(u.cmp, up) < 0 {
-			a.keyBound = up
+		if !a.set || a.compare(u.cmp, up) < 0 {
+			a.keyBound, a.set = up, true
 			return true
 		}
 		return false
@@ -52,23 +53,23 @@ func (u *updater[I, K, V]) Update(
 				up = child.keyBound
 			}
 		}
-		if a.compare(u.cmp, up) == 0 {
-			a.keyBound = u.findUpperBound(n)
-			return a.compare(u.cmp, up) != 0
+		if a.set && a.compare(u.cmp, up) == 0 {
+			a.keyBound, a.set = u.findUpperBound(n)
+			return !a.set || a.compare(u.cmp, up) != 0
 		}
 		return false
 	case aug.Split:
-		if a.compare(u.cmp, md.ModifiedOther.keyBound) != 0 &&
+		if a.set && a.compare(u.cmp, md.ModifiedOther.keyBound) != 0 &&
 			a.compare(u.cmp, u.upperBound(md.RelevantKey)) != 0 {
 			return false
 		}
 		fallthrough
 	case aug.Default, aug.Replacement:
-		prev := a.keyBound
-		a.keyBound = u.findUpperBound(n)
-		return a.compare(u.cmp, prev) != 0
+		prev, prevSet := a.keyBound, a.set
+		a.keyBound, a.set = u.findUpperBound(n)
+		return prevSet != a.set || (a.set && a.compare(u.cmp, prev) != 0)
 	default:
-		panic("")
+		panic("interval: unknown action")
 	}
 }
 
@@ -84,8 +85,9 @@ func (up *updater[I, K, V]) upperBound(interval I) keyBound[K] {
 	return keyBound[K]{k: up.end(interval)}
 }
 
-func (up *updater[I, K, V]) findUpperBound(n *aug.Node[I, V, subtreeBound[K]]) keyBound[K] {
-	var max keyBound[K]
+// findUpperBound recomputes the bound of n's subtree; ok is false for an
+// empty node.
+func (up *updater[I, K, V]) findUpperBound(n *aug.Node[I, V, subtreeBound[K]]) (max keyBound[K], ok bool) {
 	var setMax bool
 	for i, cnt := int16(0), n.Count(); i < cnt; i++ {
 		ub := up.upperBound(n.Key(i))
@@ -96,13 +98,17 @@ func (up *updater[I, K, V]) findUpperBound(n *aug.Node[I, V, subtreeBound[K]]) k
 	}
 	if !n.IsLeaf() {
 		for i, cnt := int16(0), n.Count(); i <= cnt; i++ {
-			ub := n.ChildAug(i).keyBound
-			if max.compare(up.cmp, ub) < 0 {
-				max = ub
+			child := n.ChildAug(i)
+			if !child.set {
+				continue
+			}
+			if !setMax || max.compare(up.cmp, child.keyBound) < 0 {
+				setMax = true
+				max = child.keyBound
 			}
 		}
 	}
-	return max
+	return max, setMax
 }
 
 func (b keyBound[K]) compare(cmp func(K, K) int, o keyBound[K]) int {

@@ -71,7 +71,7 @@ func compareSpans(a, b span) int {
 }
 
 func randomSpan(rng *rand.Rand) span {
-	lo := rng.IntN(200)
+	lo := rng.IntN(300) - 100 // negative endpoints too
 	switch rng.IntN(4) {
 	case 0:
 		return span{lo, lo}
@@ -202,5 +202,78 @@ func TestOverlapScanAfterSeek(t *testing.T) {
 	}
 	if want := []span{{48, 51}, {50, 53}}; !slices.Equal(got, want) {
 		t.Fatalf("scan after seek: %v, want %v", got, want)
+	}
+}
+
+// TestOverlapScanEndsOnStep checks that Next and Prev end an overlap scan,
+// so NextOverlap afterwards does not apply stale constraints.
+func TestOverlapScanEndsOnStep(t *testing.T) {
+	m := interval.NewSet(spanBounds())
+	for _, s := range []span{{0, 1}, {5, 6}, {10, 11}, {15, 16}} {
+		m.Upsert(s)
+	}
+	it := m.Iterator()
+	it.FirstOverlap(span{10, 16})
+	if !it.Valid() || it.Key() != (span{10, 11}) {
+		t.Fatalf("FirstOverlap at %v", it.Key())
+	}
+	it.Prev()
+	it.Prev()
+	if !it.Valid() || it.Key() != (span{0, 1}) {
+		t.Fatalf("after two Prev at %v", it.Key())
+	}
+	it.NextOverlap()
+	if it.Valid() {
+		t.Fatalf("NextOverlap after Prev returned %v", it.Key())
+	}
+	it.FirstOverlap(span{10, 16})
+	it.Next()
+	if !it.Valid() || it.Key() != (span{15, 16}) {
+		t.Fatalf("Next after FirstOverlap at %v", it.Key())
+	}
+	it.NextOverlap()
+	if it.Valid() {
+		t.Fatalf("NextOverlap after Next returned %v", it.Key())
+	}
+}
+
+// TestPointerEndpoints uses endpoints whose comparator cannot take the zero
+// value, which the augmentation must therefore never compare.
+func TestPointerEndpoints(t *testing.T) {
+	type ps struct{ lo, hi *int }
+	deref := func(a, b *int) int { return cmp.Compare(*a, *b) }
+	m := interval.NewSet(interval.Bounds[ps, *int]{
+		Compare: deref,
+		Key:     func(s ps) *int { return s.lo },
+		End:     func(s ps) *int { return s.hi },
+		HasEnd:  func(s ps) bool { return s.hi != nil },
+	}, aug.WithDegree(2))
+	mk := func(lo, hi int) ps {
+		p := ps{lo: &lo}
+		if hi > lo {
+			p.hi = &hi
+		}
+		return p
+	}
+	for i := -50; i < 50; i++ {
+		m.Upsert(mk(i, i+3))
+		m.Upsert(mk(i, i)) // a point
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for range m.Overlapping(mk(-10, -8)) {
+		n++
+	}
+	// Ranges starting at -12..-9 and points -10, -9.
+	if n != 6 {
+		t.Fatalf("overlapping %d, want 6", n)
+	}
+	for i := -50; i < 50; i += 2 {
+		m.Delete(mk(i, i+3))
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
 	}
 }
