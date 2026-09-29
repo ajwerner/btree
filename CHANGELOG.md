@@ -11,7 +11,8 @@
   used a seek's result as "found" changes meaning: replace it with
   `SeekExact`.
 - Sets: `Get(probe)` returns the stored item equal to a probe; `Delete`
-  returns the removed item. Set iterators and cursors are their own types
+  returns the removed item. Maps gain `Lookup(k)`, a `Get` that also
+  returns the stored key. Set iterators and cursors are their own types
   (`SetIterator`, `SetCursor`) with `Item` and no `Value`, `SetValue` or
   phantom value arguments.
 - Cursors: `Upsert` returns the replaced key and value like `Map.Upsert`;
