@@ -38,7 +38,9 @@ func New[K, V, A any](cmp func(K, K) int, up Updater[K, V, A], opts ...Option) *
 
 // NewOrdered constructs a Map keyed by a type that supports <, ordered
 // that way. It searches nodes with < directly rather than through a
-// comparison function, which is faster.
+// comparison function, which is faster. Floating-point NaN keys are not
+// supported: they compare as equal to everything, so use New with
+// cmp.Compare for keys that may be NaN.
 func NewOrdered[K cmp.Ordered, V, A any](up Updater[K, V, A], opts ...Option) *Map[K, V, A] {
 	opts = append(opts, withFind(findOrdered[K, V, A]))
 	return &Map[K, V, A]{cfg: makeConfig(cmp.Compare[K], up, opts)}
