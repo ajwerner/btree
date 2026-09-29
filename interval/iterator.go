@@ -21,10 +21,49 @@ import (
 	"github.com/ajwerner/btree/aug"
 )
 
-type Iterator[I, K, V any] struct {
-	aug.Iterator[I, V, subtreeBound[K]]
+// Span is a query: the keys a search asks about. It is separate from the
+// stored interval type so that asking about a range does not require
+// building a stored object.
+type Span[K any] struct {
+	start, end K
+	point      bool
+}
 
-	o overlapScan[I, K, V]
+// HalfOpen returns the span of keys in [start, end). A span whose end is
+// not after its start is empty and overlaps nothing.
+func HalfOpen[K any](start, end K) Span[K] {
+	return Span[K]{start: start, end: end}
+}
+
+// Point returns the span containing only key.
+func Point[K any](key K) Span[K] {
+	return Span[K]{start: key, point: true}
+}
+
+// upperBound is the span's bound, in the augmentation's terms.
+func (s Span[K]) upperBound() keyBound[K] {
+	if s.point {
+		return keyBound[K]{k: s.start, inclusive: true}
+	}
+	return keyBound[K]{k: s.end}
+}
+
+// empty reports whether the span covers no key.
+func (s Span[K]) empty(cmp func(K, K) int) bool {
+	return !s.point && cmp(s.end, s.start) <= 0
+}
+
+// Iterator is an iterator over a Map in key order; see aug.Iterator.
+type Iterator[I, K, V any] = aug.Iterator[I, V, subtreeBound[K]]
+
+// OverlapIterator visits the entries whose intervals overlap a Span, in
+// order of their start keys. Map.Overlaps returns one positioned at the
+// first overlap; Next moves to the following one. It borrows the map like
+// an Iterator does.
+type OverlapIterator[I, K, V any] struct {
+	it aug.Iterator[I, V, subtreeBound[K]]
+	u  *updater[I, K, V]
+	o  overlapScan[I, K, V]
 }
 
 // An overlap scan is a scan over all intervals that overlap with the provided
@@ -72,8 +111,7 @@ type Iterator[I, K, V any] struct {
 //     It does so because the interval at this position is the first interval with a
 //     start key larger than the search range's end key.
 type overlapScan[I, K, V any] struct {
-	bounds I
-	set    bool
+	span Span[K]
 
 	// The "soft" lower-bound constraint.
 	constrMinN       *aug.Node[I, V, subtreeBound[K]]
@@ -85,102 +123,62 @@ type overlapScan[I, K, V any] struct {
 	constrMaxPos int16
 }
 
-func (o *overlapScan[I, K, V]) reset() {
-	*o = overlapScan[I, K, V]{}
+func newOverlapIterator[I, K, V any](m *aug.Map[I, V, subtreeBound[K]], span Span[K]) OverlapIterator[I, K, V] {
+	i := OverlapIterator[I, K, V]{it: m.Iterator()}
+	i.u = aug.LowLevel(&i.it).Config().Updater.(*updater[I, K, V])
+	i.Seek(span)
+	return i
 }
 
-func (o *overlapScan[I, K, V]) empty() bool {
-	return !o.set
-}
-
-// FirstOverlap seeks to the first interval in the tree that overlaps with the
-// provided search interval.
-func (i *Iterator[I, K, V]) FirstOverlap(bounds I) {
-	i.Reset()
-	it := lowLevel(i)
-	it.IncrementPos()
-	if !i.Valid() {
-		return
+// Seek restarts the iterator at the first entry overlapping span and
+// reports whether there is one. Reusing an iterator this way avoids the
+// cost of constructing one per query.
+func (i *OverlapIterator[I, K, V]) Seek(span Span[K]) bool {
+	i.it.Reset()
+	i.o = overlapScan[I, K, V]{span: span}
+	ll := aug.LowLevel(&i.it)
+	cfg := i.cfg()
+	if span.empty(cfg.cmp) {
+		return false
 	}
-	i.o = overlapScan[I, K, V]{bounds: bounds, set: true}
+	ll.IncrementPos()
+	if !i.it.Valid() {
+		return false
+	}
 	i.constrainMinSearchBounds()
 	i.constrainMaxSearchBounds()
 	i.findNextOverlap()
+	return i.it.Valid()
 }
 
-func lowLevel[I, K, V any](
-	it *Iterator[I, K, V],
-) *aug.LowLevelIterator[I, V, subtreeBound[K]] {
-	return aug.LowLevel(&it.Iterator)
-}
+func (i *OverlapIterator[I, K, V]) cfg() *updater[I, K, V] { return i.u }
 
-// Reset marks the iterator as invalid and clears any state, including an
-// overlap scan in progress.
-func (i *Iterator[I, K, V]) Reset() {
-	i.o.reset()
-	i.Iterator.Reset()
-}
+// Valid reports whether the iterator is at an overlapping entry.
+func (i *OverlapIterator[I, K, V]) Valid() bool { return i.it.Valid() }
 
-// First seeks to the first interval, ending any overlap scan.
-func (i *Iterator[I, K, V]) First() {
-	i.o.reset()
-	i.Iterator.First()
-}
+// Key returns the interval at the iterator's position, which must be
+// valid.
+func (i *OverlapIterator[I, K, V]) Key() I { return i.it.Key() }
 
-// Last seeks to the last interval, ending any overlap scan.
-func (i *Iterator[I, K, V]) Last() {
-	i.o.reset()
-	i.Iterator.Last()
-}
+// Value returns the value at the iterator's position, which must be valid.
+func (i *OverlapIterator[I, K, V]) Value() V { return i.it.Value() }
 
-// SeekGE seeks to the first interval greater than or equal to the
-// provided one, ending any overlap scan.
-func (i *Iterator[I, K, V]) SeekGE(bounds I) bool {
-	i.o.reset()
-	return i.Iterator.SeekGE(bounds)
-}
-
-// SeekGT seeks to the first interval greater than the provided one, ending
-// any overlap scan.
-func (i *Iterator[I, K, V]) SeekGT(bounds I) bool {
-	i.o.reset()
-	return i.Iterator.SeekGT(bounds)
-}
-
-// SeekLE seeks to the last interval less than or equal to the provided one,
-// ending any overlap scan.
-func (i *Iterator[I, K, V]) SeekLE(bounds I) bool {
-	i.o.reset()
-	return i.Iterator.SeekLE(bounds)
-}
-
-// SeekLT seeks to the last interval less than the provided one, ending any
-// overlap scan.
-func (i *Iterator[I, K, V]) SeekLT(bounds I) bool {
-	i.o.reset()
-	return i.Iterator.SeekLT(bounds)
-}
-
-// NextOverlap positions the iterator to the interval immediately following
-// its current position that overlaps with the search interval.
-func (i *Iterator[I, K, V]) NextOverlap() {
-	if !i.Valid() {
-		return
+// Next positions the iterator at the following overlapping entry and
+// reports whether there is one.
+func (i *OverlapIterator[I, K, V]) Next() bool {
+	if !i.it.Valid() {
+		return false
 	}
-	if i.o.empty() {
-		// Invalid. Mixed overlap scan with non-overlap scan.
-		i.Reset()
-		return
-	}
-	lowLevel(i).IncrementPos()
+	aug.LowLevel(&i.it).IncrementPos()
 	i.findNextOverlap()
+	return i.it.Valid()
 }
 
-func (i *Iterator[I, K, V]) constrainMinSearchBounds() {
-	ll := lowLevel(i)
-	cfg := ll.Config().Updater.(*updater[I, K, V])
+func (i *OverlapIterator[I, K, V]) constrainMinSearchBounds() {
+	ll := aug.LowLevel(&i.it)
+	cfg := i.cfg()
 	cmp := cfg.cmp
-	k := cfg.key(i.o.bounds)
+	k := i.o.span.start
 	n := ll.Node()
 	j := sort.Search(int(n.Count()), func(j int) bool {
 		return cmp(k, cfg.key(n.Key(int16(j)))) <= 0
@@ -189,11 +187,11 @@ func (i *Iterator[I, K, V]) constrainMinSearchBounds() {
 	i.o.constrMinPos = int16(j)
 }
 
-func (i *Iterator[I, K, V]) constrainMaxSearchBounds() {
-	ll := lowLevel(i)
-	cfg := ll.Config().Updater.(*updater[I, K, V])
+func (i *OverlapIterator[I, K, V]) constrainMaxSearchBounds() {
+	ll := aug.LowLevel(&i.it)
+	cfg := i.cfg()
 	cmp := cfg.cmp
-	up := cfg.upperBound(i.o.bounds)
+	up := i.o.span.upperBound()
 	n := ll.Node()
 	j := sort.Search(int(n.Count()), func(j int) bool {
 		return !up.contains(cmp, cfg.key(n.Key(int16(j))))
@@ -202,17 +200,18 @@ func (i *Iterator[I, K, V]) constrainMaxSearchBounds() {
 	i.o.constrMaxPos = int16(j)
 }
 
-func (i *Iterator[I, K, V]) findNextOverlap() {
-	ll := lowLevel(i)
-	cfg := ll.Config().Updater.(*updater[I, K, V])
+func (i *OverlapIterator[I, K, V]) findNextOverlap() {
+	ll := aug.LowLevel(&i.it)
+	cfg := i.cfg()
 	cmp := cfg.cmp
+	start := i.o.span.start
 	for {
 		if ll.Pos() > ll.Node().Count() {
 			// Iterate up tree.
 			ll.Ascend()
 		} else if !ll.Node().IsLeaf() {
 			// Iterate down tree.
-			if i.o.constrMinReached || ll.ChildAug().contains(cmp, cfg.key(i.o.bounds)) {
+			if i.o.constrMinReached || ll.ChildAug().contains(cmp, start) {
 				par := ll.Node()
 				pos := ll.Pos()
 				ll.Descend()
@@ -231,7 +230,7 @@ func (i *Iterator[I, K, V]) findNextOverlap() {
 		// Check search bounds.
 		if ll.Node() == i.o.constrMaxN && ll.Pos() == i.o.constrMaxPos {
 			// Invalid. Past possible overlaps.
-			i.Reset()
+			i.it.Reset()
 			return
 		}
 		if ll.Node() == i.o.constrMinN && ll.Pos() == i.o.constrMinPos {
@@ -248,7 +247,7 @@ func (i *Iterator[I, K, V]) findNextOverlap() {
 				// span's start key.
 				return
 			}
-			if cfg.upperBound(i.Key()).contains(cmp, cfg.key(i.o.bounds)) {
+			if cfg.upperBound(i.it.Key()).contains(cmp, start) {
 				return
 			}
 		}

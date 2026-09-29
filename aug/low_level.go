@@ -12,9 +12,10 @@ func LowLevel[K, V, A any](
 	return it.lowLevel()
 }
 
-// Config returns the Map's config.
-func (i *LowLevelIterator[K, V, A]) Config() *Config[K, V, A] {
-	return &i.r.cfg.Config
+// Config returns a copy of the Map's configuration. A Map's Updater and
+// comparison function are fixed at construction.
+func (i *LowLevelIterator[K, V, A]) Config() Config[K, V, A] {
+	return i.r.cfg.Config
 }
 
 // IncrementPos increments the iterator's position within the current node.
@@ -60,8 +61,8 @@ func (i *LowLevelIterator[K, V, A]) Frame(d int) (*Node[K, V, A], int16) {
 // ChildAug returns the augmentation of the child node at the current position.
 // It is illegal to call if this is a leaf node or there is no child
 // node at the current position.
-func (i *LowLevelIterator[K, V, A]) ChildAug() *A {
-	return &i.node.children[i.pos].aug
+func (i *LowLevelIterator[K, V, A]) ChildAug() A {
+	return i.node.children[i.pos].aug
 }
 
 // Descend pushes the current position into the iterators stack and

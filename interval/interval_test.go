@@ -62,10 +62,10 @@ func TestIntervalTree(t *testing.T) {
 		}
 	}
 	tree := New[IntInterval, int, struct{}](Bounds[IntInterval, int]{
-		Compare:          cmp.Compare[int],
-		Key:              IntInterval.Key,
-		End:              IntInterval.End,
-		CompareIntervals: IntervalCompare[IntInterval](cmp.Compare[int]),
+		Compare:  cmp.Compare[int],
+		Key:      IntInterval.Key,
+		End:      IntInterval.End,
+		TieBreak: IntervalCompare[IntInterval](cmp.Compare[int]),
 	})
 	items := []IntInterval{{1, 4}, {2, 5}, {3, 3}, {3, 6}, {4, 7}}
 	for _, item := range items {
@@ -92,8 +92,8 @@ func TestIntervalTree(t *testing.T) {
 		},
 	} {
 		var res []IntInterval
-		for iter.FirstOverlap(tc.q); iter.Valid(); iter.NextOverlap() {
-			res = append(res, iter.Key())
+		for it := tree.Overlaps(HalfOpen(tc.q[0], tc.q[1])); it.Valid(); it.Next() {
+			res = append(res, it.Key())
 		}
 		if !slices.Equal(tc.res, res) {
 			t.Fatalf("expected %v, got %v", tc.res, res)

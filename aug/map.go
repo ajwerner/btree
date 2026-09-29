@@ -22,7 +22,9 @@ import (
 
 // Map is an augmented copy-on-write B-tree map from K to V. Each node
 // carries an augmentation of type A maintained by the Updater given to New.
-// See the package documentation for the ownership and concurrency rules.
+// The zero Map is not usable; construct one with New or NewOrdered, and do
+// not copy it by value. See the package documentation for the ownership
+// and concurrency rules.
 type Map[K, V, A any] struct {
 	root   *Node[K, V, A]
 	length int
@@ -142,9 +144,9 @@ func (t *Map[K, V, A]) Upsert(item K, value V) (replacedK K, replacedV V, replac
 	return replacedK, replacedV, replaced
 }
 
-// Iterator returns a new Iterator object. It is not safe to continue using an
-// Iterator after modifications are made to the tree. If modifications are made,
-// create a new Iterator.
+// Iterator returns a new Iterator positioned before the first entry. A
+// mutation of the Map invalidates the Iterator's position; reposition it
+// (Reset, First, a Seek) before using it again.
 func (t *Map[K, V, A]) Iterator() Iterator[K, V, A] {
 	it := Iterator[K, V, A]{r: t}
 	it.Reset()
@@ -172,18 +174,25 @@ func (t *Map[K, V, A]) Len() int {
 
 // Get returns the value associated with the requested key, if it exists.
 func (t *Map[K, V, A]) Get(k K) (v V, ok bool) {
+	_, v, ok = t.Lookup(k)
+	return v, ok
+}
+
+// Lookup returns the stored entry whose key compares equal to k, if any.
+// The stored key may differ from k in fields the comparison ignores.
+func (t *Map[K, V, A]) Lookup(k K) (key K, v V, ok bool) {
 	n := t.root
 	for n != nil {
 		i, found := n.find(&t.cfg, k)
 		if found {
-			return n.values[i], true
+			return n.keys[i], n.values[i], true
 		}
 		if n.IsLeaf() {
 			break
 		}
 		n = n.children[i]
 	}
-	return v, false
+	return key, v, false
 }
 
 // Compare compares two keys using the Map's comparison function.

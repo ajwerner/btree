@@ -48,7 +48,7 @@ func ExampleIterator_SeekNth() {
 	}
 	it := s.Iterator()
 	for it.SeekNth(1); it.Valid(); it.Next() {
-		fmt.Println(it.Rank(), it.Key())
+		fmt.Println(it.Rank(), it.Item())
 	}
 	// Output:
 	// 1 fig

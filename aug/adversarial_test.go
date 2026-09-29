@@ -16,16 +16,17 @@ package aug_test
 
 import (
 	"cmp"
+	"math"
 	"math/rand/v2"
 	"testing"
 
 	"github.com/ajwerner/btree/aug"
 )
 
-// TestSeekWhereNonMonotone checks that a predicate that breaks the
+// TestSeekPrefixNonMonotone checks that a predicate that breaks the
 // monotonicity contract still leaves the iterator in a consistent state:
 // valid at some entry, or past the end, never panicking or looping.
-func TestSeekWhereNonMonotone(t *testing.T) {
+func TestSeekPrefixNonMonotone(t *testing.T) {
 	rng := rand.New(rand.NewPCG(5, 6))
 	for _, degree := range []int{2, 16} {
 		m := aug.NewMonoid[int, int, int](cmp.Compare[int], aug.Count[int, int]{}, aug.WithDegree(degree))
@@ -35,13 +36,16 @@ func TestSeekWhereNonMonotone(t *testing.T) {
 		it := m.Iterator()
 		for range 2000 {
 			calls := 0
-			prefix := it.SeekWhere(func(int, int) bool {
+			prefix, ok := it.SeekPrefix(func(int) bool {
 				calls++
 				if calls > 100000 {
 					t.Fatal("predicate called too many times")
 				}
 				return rng.IntN(3) == 0
 			})
+			if ok != it.Valid() {
+				t.Fatalf("SeekPrefix reported %v but Valid is %v", ok, it.Valid())
+			}
 			if it.Valid() {
 				if got := it.Prefix(); got != prefix {
 					t.Fatalf("returned prefix %d, Prefix() %d", prefix, got)
@@ -55,21 +59,20 @@ func TestSeekWhereNonMonotone(t *testing.T) {
 				if prefix != 5000 {
 					t.Fatalf("past the end with prefix %d, want the total", prefix)
 				}
-				it.Prev()
-				if !it.Valid() || it.Key() != 4999 {
-					t.Fatalf("Prev after a failed SeekWhere gave valid=%v %d", it.Valid(), it.Key())
+				if !it.Prev() || it.Key() != 4999 {
+					t.Fatalf("Prev after a failed SeekPrefix gave valid=%v %d", it.Valid(), it.Key())
 				}
 			}
 			it.Next()
 			it.Prev()
 		}
 		// A predicate that is always false ends past the end with the total.
-		if p := it.SeekWhere(func(int, int) bool { return false }); p != 5000 || it.Valid() {
-			t.Fatalf("always-false: prefix %d valid %v", p, it.Valid())
+		if p, ok := it.SeekPrefix(func(int) bool { return false }); ok || p != 5000 || it.Valid() {
+			t.Fatalf("always-false: prefix %d ok %v valid %v", p, ok, it.Valid())
 		}
 		// Always true stops at the first entry.
-		if p := it.SeekWhere(func(int, int) bool { return true }); p != 0 || !it.Valid() || it.Key() != 0 {
-			t.Fatalf("always-true: prefix %d valid %v key %d", p, it.Valid(), it.Key())
+		if p, ok := it.SeekPrefix(func(int) bool { return true }); !ok || p != 0 || !it.Valid() || it.Key() != 0 {
+			t.Fatalf("always-true: prefix %d ok %v valid %v key %d", p, ok, it.Valid(), it.Key())
 		}
 	}
 }
@@ -176,6 +179,87 @@ func TestVerifyInterfaceTypes(t *testing.T) {
 	}
 	for i := 0; i < 100; i += 3 {
 		m.Delete(i)
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// nodeCounter is a shape-dependent augmentation: the number of nodes in
+// the subtree. It recomputes from its children on every event and
+// implements Restructurer, as the Updater documentation prescribes for
+// such augmentations.
+type nodeCounter[K, V any] struct{}
+
+func (u nodeCounter[K, V]) Restructured(n *aug.Node[K, V, int]) bool {
+	return u.Update(n, aug.UpdateInfo[K, V, int]{})
+}
+
+func (nodeCounter[K, V]) Update(n *aug.Node[K, V, int], _ aug.UpdateInfo[K, V, int]) bool {
+	count := 1
+	if !n.IsLeaf() {
+		for i := int16(0); i <= n.Count(); i++ {
+			count += n.ChildAug(i)
+		}
+	}
+	changed := n.Aug() != count
+	n.SetAug(count)
+	return changed
+}
+
+// TestStructuralAugmentation checks that splits, merges and rebalances
+// reach ancestors' augmentations even when no entry below them changed,
+// including the merge caused by deleting a key that is absent.
+func TestStructuralAugmentation(t *testing.T) {
+	// The reviewer's example: degree 2, keys 1..6 leave the root at 3
+	// nodes instead of 4 when the split is not reported.
+	m := aug.New[int, int, int](cmp.Compare[int], nodeCounter[int, int]{}, aug.WithDegree(2))
+	for i := 1; i <= 6; i++ {
+		m.Upsert(i, i)
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+	for _, degree := range []int{2, 3} {
+		m := aug.New[int, int, int](cmp.Compare[int], nodeCounter[int, int]{}, aug.WithDegree(degree))
+		rng := rand.New(rand.NewPCG(31, 32))
+		for step := range 20000 {
+			k := rng.IntN(500)
+			switch rng.IntN(3) {
+			case 0, 1:
+				m.Upsert(k, step)
+			case 2:
+				m.Delete(rng.IntN(600)) // often absent, which can still merge
+			}
+			if step%500 == 499 {
+				if err := m.Verify(); err != nil {
+					t.Fatalf("degree %d step %d: %v", degree, step, err)
+				}
+			}
+		}
+	}
+}
+
+// maxFloat is a NaN-propagating maximum over non-negative floats whose
+// Equaler treats NaN as equal to itself, as cmp.Compare does, where
+// reflect.DeepEqual would not.
+type maxFloat struct{}
+
+func (maxFloat) Identity() float64           { return 0 }
+func (maxFloat) Of(_ int, v float64) float64 { return v }
+func (maxFloat) Combine(a, b float64) float64 {
+	if math.IsNaN(a) || math.IsNaN(b) {
+		return math.NaN()
+	}
+	return max(a, b)
+}
+func (maxFloat) Equal(a, b float64) bool { return cmp.Compare(a, b) == 0 }
+
+func TestVerifyUsesEqualer(t *testing.T) {
+	m := aug.NewMonoid[int, float64, float64](cmp.Compare[int], maxFloat{}, aug.WithDegree(2))
+	nan := math.NaN()
+	for i := range 50 {
+		m.Upsert(i, nan)
 	}
 	if err := m.Verify(); err != nil {
 		t.Fatal(err)

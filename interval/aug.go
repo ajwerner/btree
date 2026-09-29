@@ -19,6 +19,7 @@ import "github.com/ajwerner/btree/aug"
 
 type subtreeBound[K any] struct {
 	keyBound[K]
+	set bool // false until the first entry; the zero K is not a bound
 }
 
 type updater[I, K, V any] struct {
@@ -34,14 +35,18 @@ func (u *updater[I, K, V]) Update(
 	a := n.Aug()
 	switch md.Action {
 	case aug.Insertion:
+		if n.IsLeaf() && md.ModifiedOther == nil {
+			u.validate(md.RelevantKey)
+		}
 		up := u.upperBound(md.RelevantKey)
 		if child := md.ModifiedOther; child != nil {
 			if up.compare(u.cmp, child.keyBound) < 0 {
 				up = child.keyBound
 			}
 		}
-		if a.compare(u.cmp, up) < 0 {
-			a.keyBound = up
+		if !a.set || a.compare(u.cmp, up) < 0 {
+			a.keyBound, a.set = up, true
+			n.SetAug(a)
 			return true
 		}
 		return false
@@ -52,23 +57,28 @@ func (u *updater[I, K, V]) Update(
 				up = child.keyBound
 			}
 		}
-		if a.compare(u.cmp, up) == 0 {
-			a.keyBound = u.findUpperBound(n)
-			return a.compare(u.cmp, up) != 0
+		if a.set && a.compare(u.cmp, up) == 0 {
+			a.keyBound, a.set = u.findUpperBound(n)
+			n.SetAug(a)
+			return !a.set || a.compare(u.cmp, up) != 0
 		}
 		return false
 	case aug.Split:
-		if a.compare(u.cmp, md.ModifiedOther.keyBound) != 0 &&
+		if a.set && a.compare(u.cmp, md.ModifiedOther.keyBound) != 0 &&
 			a.compare(u.cmp, u.upperBound(md.RelevantKey)) != 0 {
 			return false
 		}
 		fallthrough
-	case aug.Default, aug.Replacement:
-		prev := a.keyBound
-		a.keyBound = u.findUpperBound(n)
-		return a.compare(u.cmp, prev) != 0
+	case aug.Replacement:
+		u.validate(md.RelevantKey)
+		fallthrough
+	case aug.Default:
+		prev, prevSet := a.keyBound, a.set
+		a.keyBound, a.set = u.findUpperBound(n)
+		n.SetAug(a)
+		return prevSet != a.set || (a.set && a.compare(u.cmp, prev) != 0)
 	default:
-		panic("")
+		panic("interval: unknown action")
 	}
 }
 
@@ -77,15 +87,28 @@ type keyBound[K any] struct {
 	inclusive bool
 }
 
+// upperBound is the bound on keys an interval covers: its end, exclusive,
+// or its start, inclusive, for a point. An interval whose end is not after
+// its start is a point, so that leaf matching and subtree pruning agree.
 func (up *updater[I, K, V]) upperBound(interval I) keyBound[K] {
-	if !up.hasEnd(interval) {
-		return keyBound[K]{k: up.key(interval), inclusive: true}
+	if up.hasEnd(interval) {
+		return keyBound[K]{k: up.end(interval)}
 	}
-	return keyBound[K]{k: up.end(interval)}
+	return keyBound[K]{k: up.key(interval), inclusive: true}
 }
 
-func (up *updater[I, K, V]) findUpperBound(n *aug.Node[I, V, subtreeBound[K]]) keyBound[K] {
-	var max keyBound[K]
+// validate panics if a custom HasEnd claims an end that is not after the
+// start; the default HasEnd cannot. It is called once per inserted or
+// replaced interval, at the node holding it.
+func (up *updater[I, K, V]) validate(interval I) {
+	if up.hasEnd(interval) && up.cmp(up.end(interval), up.key(interval)) <= 0 {
+		panic("interval: an interval with an end must end after it starts; see Bounds.HasEnd")
+	}
+}
+
+// findUpperBound recomputes the bound of n's subtree; ok is false for an
+// empty node.
+func (up *updater[I, K, V]) findUpperBound(n *aug.Node[I, V, subtreeBound[K]]) (max keyBound[K], ok bool) {
 	var setMax bool
 	for i, cnt := int16(0), n.Count(); i < cnt; i++ {
 		ub := up.upperBound(n.Key(i))
@@ -96,13 +119,17 @@ func (up *updater[I, K, V]) findUpperBound(n *aug.Node[I, V, subtreeBound[K]]) k
 	}
 	if !n.IsLeaf() {
 		for i, cnt := int16(0), n.Count(); i <= cnt; i++ {
-			ub := n.ChildAug(i).keyBound
-			if max.compare(up.cmp, ub) < 0 {
-				max = ub
+			child := n.ChildAug(i)
+			if !child.set {
+				continue
+			}
+			if !setMax || max.compare(up.cmp, child.keyBound) < 0 {
+				setMax = true
+				max = child.keyBound
 			}
 		}
 	}
-	return max
+	return max, setMax
 }
 
 func (b keyBound[K]) compare(cmp func(K, K) int, o keyBound[K]) int {

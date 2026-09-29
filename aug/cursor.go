@@ -114,7 +114,17 @@ func (c *Cursor[K, V, A]) SetValue(v V) {
 
 // Delete removes the current entry and returns it. The cursor must be
 // valid. Afterwards the cursor is on the entry that followed the removed
-// one, or past the end if there was none.
+// one, or past the end if there was none, so a loop that deletes must not
+// also call Next for the deleted entry:
+//
+//	for ok := c.First(); ok; {
+//		if drop(c.Key()) {
+//			c.Delete()
+//			ok = c.Valid()
+//		} else {
+//			ok = c.Next()
+//		}
+//	}
 func (c *Cursor[K, V, A]) Delete() (K, V) {
 	if !c.Valid() {
 		panic("aug: Delete on an invalid Cursor")
@@ -146,12 +156,13 @@ func (c *Cursor[K, V, A]) Delete() (K, V) {
 	return k, v
 }
 
-// Rekey moves the current entry to key k, keeping its value. The cursor
-// must be valid. If another entry has key k it is replaced. Afterwards the
-// cursor is on the moved entry. When k still sorts between the entry's
-// neighbours the move is in place and the Updater sees a Replacement whose
-// key changed; otherwise it sees the Removal and Insertion of the fallback.
-func (c *Cursor[K, V, A]) Rekey(k K) {
+// Rekey moves the current entry to key k, keeping its value, and returns
+// any entry that had key k and was replaced. The cursor must be valid.
+// Afterwards the cursor is on the moved entry. When k still sorts between
+// the entry's neighbours the move is in place and the Updater sees a
+// Replacement whose key changed; otherwise it sees the Removal and
+// Insertion of the fallback.
+func (c *Cursor[K, V, A]) Rekey(k K) (replacedK K, replacedV V, replaced bool) {
 	if !c.Valid() {
 		panic("aug: Rekey on an invalid Cursor")
 	}
@@ -177,19 +188,19 @@ func (c *Cursor[K, V, A]) Rekey(k K) {
 				PrevKey:       prev,
 				PrevValue:     v,
 			})
-			return
+			return replacedK, replacedV, false
 		}
 	}
 	// Otherwise remove it and re-insert it near the cursor, which needs no
 	// further descent when the new position is in the same leaf.
 	_, v := c.Delete()
-	c.Upsert(k, v)
+	return c.Upsert(k, v)
 }
 
 // Upsert inserts or replaces the entry with key k, using the cursor's
-// position as a hint. Afterwards the cursor is on that entry. It returns
-// the replaced value, if any.
-func (c *Cursor[K, V, A]) Upsert(k K, v V) (replacedV V, replaced bool) {
+// position as a hint, and returns any replaced entry, as Map.Upsert does.
+// Afterwards the cursor is on that entry.
+func (c *Cursor[K, V, A]) Upsert(k K, v V) (replacedK K, replacedV V, replaced bool) {
 	t := c.r
 	n := c.node
 	if n != nil && n.IsLeaf() && len(n.keys) < t.cfg.maxEntries {
@@ -199,24 +210,26 @@ func (c *Cursor[K, V, A]) Upsert(k K, v V) (replacedV V, replaced bool) {
 			n = c.node
 			c.pos = int16(i)
 			if found {
-				replacedV = n.values[i]
-				n.values[i] = v
+				// Replace the key as well as the value: it compares equal
+				// but need not be identical.
+				replacedK, replacedV = n.keys[i], n.values[i]
+				n.keys[i], n.values[i] = k, v
 				c.updatePath(UpdateInfo[K, V, A]{
 					Action:        Replacement,
 					RelevantKey:   k,
 					RelevantValue: v,
-					PrevKey:       k,
+					PrevKey:       replacedK,
 					PrevValue:     replacedV,
 				})
-				return replacedV, true
+				return replacedK, replacedV, true
 			}
 			n.insertAt(i, k, v, nil)
 			t.length++
 			c.updatePath(UpdateInfo[K, V, A]{Action: Insertion, RelevantKey: k, RelevantValue: v})
-			return replacedV, false
+			return replacedK, replacedV, false
 		}
 	}
-	_, replacedV, replaced = t.Upsert(k, v)
+	replacedK, replacedV, replaced = t.Upsert(k, v)
 	c.SeekGE(k)
-	return replacedV, replaced
+	return replacedK, replacedV, replaced
 }

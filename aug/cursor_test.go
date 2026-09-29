@@ -167,7 +167,7 @@ func testCursor(t *testing.T, degree int) {
 			k := rng.IntN(1200)
 			v := rng.IntN(1000)
 			pv, had := ref[k]
-			gotV, replaced := c.Upsert(k, v)
+			_, gotV, replaced := c.Upsert(k, v)
 			if replaced != had || (had && gotV != pv) {
 				t.Fatalf("step %d: Upsert(%d) = (%d, %v), want (%d, %v)", step, k, gotV, replaced, pv, had)
 			}
@@ -465,5 +465,73 @@ func TestCursorWriterWithSnapshotReaders(t *testing.T) {
 	wg.Wait()
 	if err := m.Verify(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestCursorComparatorEquivalentKeys uses keys that compare by id only, so
+// an upsert may replace a key with a distinct but equal one, and an
+// augmentation that depends on the key, so a stale key is detectable.
+func TestCursorComparatorEquivalentKeys(t *testing.T) {
+	type wkey struct{ id, weight int }
+	byID := func(a, b wkey) int { return cmp.Compare(a.id, b.id) }
+	weighted := aug.Sum(func(k wkey, v int) int { return k.weight * v })
+	rng := rand.New(rand.NewPCG(21, 22))
+	for _, degree := range []int{2, 16} {
+		m := aug.NewMonoid[wkey, int, int](byID, weighted, aug.WithDegree(degree))
+		type entry struct{ weight, value int }
+		ref := map[int]entry{}
+		c := m.Cursor()
+		check := func() {
+			t.Helper()
+			if err := m.Verify(); err != nil {
+				t.Fatal(err)
+			}
+			want := 0
+			for _, e := range ref {
+				want += e.weight * e.value
+			}
+			if got := m.Total(); got != want {
+				t.Fatalf("Total %d, want %d", got, want)
+			}
+			// The stored key must be the latest one, not just an equal one.
+			for k, v := range m.All() {
+				if e := ref[k.id]; e.weight != k.weight || e.value != v {
+					t.Fatalf("stored {%d %d}:%d, want {%d %d}:%d", k.id, k.weight, v, k.id, e.weight, e.value)
+				}
+			}
+		}
+		for step := range 20000 {
+			id, w, v := rng.IntN(300), 1+rng.IntN(9), rng.IntN(100)
+			switch rng.IntN(5) {
+			case 0:
+				m.Upsert(wkey{id, w}, v)
+				ref[id] = entry{w, v}
+			case 1:
+				c.SeekGE(wkey{id: rng.IntN(300)})
+				c.Upsert(wkey{id, w}, v) // hinted; in place when the leaf allows
+				ref[id] = entry{w, v}
+			case 2:
+				if c.SeekExact(wkey{id: id}) {
+					c.SetValue(v)
+					ref[id] = entry{ref[id].weight, v}
+				}
+			case 3:
+				if c.SeekExact(wkey{id: id}) {
+					c.Delete()
+					delete(ref, id)
+				}
+			case 4:
+				if c.SeekExact(wkey{id: id}) {
+					// Rekey to an equal key with a new weight: in place.
+					old := c.Key()
+					c.Rekey(wkey{id, w})
+					ref[id] = entry{w, ref[old.id].value}
+				}
+			}
+			if step%2000 == 1999 {
+				check()
+			}
+		}
+		check()
 	}
 }

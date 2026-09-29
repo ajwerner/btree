@@ -1,5 +1,89 @@
 # Changelog
 
+## Unreleased
+
+### API (breaking)
+
+- Every positioning method on iterators and cursors (`First`, `Last`,
+  `Next`, `Prev`, the seeks, `SeekNth`) returns whether the iterator is now
+  at an entry. `SeekGE` and `SeekLT` no longer report whether the sought
+  key exists; `SeekExact` does. Code that compiled against `v0.2.0` and
+  used a seek's result as "found" changes meaning: replace it with
+  `SeekExact`.
+- Sets: `Get(probe)` returns the stored item equal to a probe; `Delete`
+  returns the removed item. Set iterators and cursors are their own types
+  (`SetIterator`, `SetCursor`) with `Item` and no `Value`, `SetValue` or
+  phantom value arguments.
+- Cursors: `Upsert` returns the replaced key and value like `Map.Upsert`;
+  `Rekey` returns the entry it displaced at the destination.
+- interval: queries are `Span`s (`HalfOpen`, `Point`) instead of stored
+  intervals; `Overlaps(span)` returns an `OverlapIterator` whose `Next` is
+  always the next overlap and whose `Seek` restarts it for another query,
+  and `Iterator` is a plain iterator with no overlap mode. `Bounds.HasEnd`
+  defaults to "every interval has an end; one whose end is not after its
+  start is a point" instead of the zero-end convention, and the default
+  tie-break treats every representation of a point at a key as the same
+  item. `Bounds.CompareIntervals` is optional again as a single-call
+  comparator that must order by start, which `Verify` checks. `Set` has
+  `Get`, an item-returning `Delete`, `SetIterator`, `SetCursor` and
+  `SetOverlapIterator`.
+- aug: `Monoid`/`Group` are `CommutativeMonoid`/`CommutativeGroup` and
+  require an `Identity` method; `SeekWhere(prefix, contribution)` is
+  `SeekPrefix(inclusivePrefix)` with a predicate that turns true at most
+  once, and returns the prefix and whether an entry was found;
+  `Node.Aug` and `ChildAug` return values and `Node.SetAug` is for
+  Updaters; `MonoidMap` no longer exposes an embedded `Map`; `New` panics
+  on a nil comparison function. The package documents one ownership
+  contract for every collection.
+
+### Fixed
+
+- Splits, merges and rebalances are reported to Updaters that implement
+  the new `Restructurer` interface, so augmentations that depend on the
+  shape of the subtree (node counts, heights) can stay correct; deleting
+  an absent key that merges nodes is covered. Augmentations that depend
+  only on the entries pay nothing. The `Updater` documentation states
+  what an Updater is told.
+- Nodes start from the monoid's `Identity`, fresh and recycled, so a
+  monoid whose identity is not the zero value aggregates correctly.
+- Reference counts are 64-bit; clones dropped without `Clear` can no longer
+  wrap them.
+- An interval whose end is not after its start is a point, so leaf matching
+  and subtree pruning agree on it wherever it sits in the tree.
+- `Cursor.Upsert` replaced only the value when the key compared equal to
+  an existing one; it now replaces the key too and reports the previous
+  key to the Updater, so key-dependent augmentations stay correct.
+- The interval augmentation treated the zero endpoint as its initial
+  bound, which over-estimated bounds for negative endpoints and compared
+  the zero value with comparators that cannot take it (pointer endpoints
+  panicked). The bound now has an explicit unset state.
+- `Next` and `Prev` on an interval iterator end an overlap scan, as the
+  seeks already did, so `NextOverlap` after stepping does not apply stale
+  constraints.
+- `Verify` no longer copies a node's reference count non-atomically while
+  clones may be changing it.
+
+### Changed
+
+- `interval.Bounds.TieBreak` orders intervals with equal start keys; the
+  tree orders by start first. `CompareIntervals` remains for a
+  single-call comparator and must order by start.
+- `LowLevelIterator.Config` returns a copy and `Config.Compare` has a
+  value receiver; a Map's Updater and comparison function are fixed at
+  construction.
+- `Verify` compares augmentations with the Updater's `Equal` when it
+  implements `Equaler`; `MonoidUpdater` forwards the Monoid's.
+- `interval.Cursor`, `interval.FreeList` and `interval.NewFreeList` name
+  the types that were only reachable through inference.
+- The interval package documents its overlap cost as O(log n) plus the
+  ancestors of the k matches, up to O(k log(n/k)) when they are scattered,
+  rather than O(log n + k).
+- `SeekWhere` documents the contract its single descent needs: the
+  predicate must be exact for spans, true for a span exactly when true for
+  some entry of it.
+- The `aug` documentation states that maps must not be copied by value and
+  that keys, values and augmentations are shallow-copied.
+
 ## v0.2.0 (2026-09-29)
 
 A rewrite of the core with the same design (PR #3, from `1cedbd5`).

@@ -38,6 +38,14 @@ func (s span) String() string {
 	return fmt.Sprintf("[%d,%d)", s.lo, s.hi)
 }
 
+// toSpan is the query for a test span: a point when hi is not after lo.
+func toSpan(s span) interval.Span[int] {
+	if s.hi > s.lo {
+		return interval.HalfOpen(s.lo, s.hi)
+	}
+	return interval.Point(s.lo)
+}
+
 func spanBounds() interval.Bounds[span, int] {
 	b := interval.BoundsOf[span](cmp.Compare[int])
 	b.HasEnd = func(s span) bool { return s.hi > s.lo }
@@ -71,7 +79,7 @@ func compareSpans(a, b span) int {
 }
 
 func randomSpan(rng *rand.Rand) span {
-	lo := rng.IntN(200)
+	lo := rng.IntN(300) - 100 // negative endpoints too
 	switch rng.IntN(4) {
 	case 0:
 		return span{lo, lo}
@@ -119,7 +127,7 @@ func testOverlapProperty(t *testing.T, degree int) {
 			}
 			slices.SortFunc(want, compareSpans)
 			var got []span
-			for s := range m.Overlapping(q) {
+			for s := range m.Overlapping(toSpan(q)) {
 				got = append(got, s)
 			}
 			if !slices.Equal(got, want) {
@@ -144,7 +152,7 @@ func testOverlapProperty(t *testing.T, degree int) {
 						break
 					}
 				}
-				removed := m.Delete(s)
+				_, removed := m.Delete(s)
 				_, had := ref[s]
 				if removed != had {
 					t.Fatalf("step %d: Delete(%v) = %v, want %v", step, s, removed, had)
@@ -173,34 +181,186 @@ func testOverlapProperty(t *testing.T, degree int) {
 	check(m, ref)
 }
 
-// TestOverlapScanAfterSeek checks that a plain seek ends an overlap scan
-// in progress, so that a later NextOverlap does not continue with stale
-// constraints.
-func TestOverlapScanAfterSeek(t *testing.T) {
+// TestOverlapIteratorIsIndependent checks that an OverlapIterator and a
+// plain Iterator on the same map do not disturb each other, and that an
+// empty or reversed query span overlaps nothing.
+func TestOverlapIteratorIsIndependent(t *testing.T) {
 	m := interval.NewSet(spanBounds())
-	for i := 0; i < 100; i += 2 {
-		m.Upsert(span{i, i + 3})
+	for _, s := range []span{{0, 1}, {5, 6}, {10, 11}, {15, 16}} {
+		m.Upsert(s)
+	}
+	ov := m.Overlaps(interval.HalfOpen(10, 16))
+	if !ov.Valid() || ov.Item() != (span{10, 11}) {
+		t.Fatalf("Overlaps at %v", ov.Item())
 	}
 	it := m.Iterator()
-	it.FirstOverlap(span{10, 12})
-	if !it.Valid() || it.Key() != (span{8, 11}) {
-		t.Fatalf("FirstOverlap at %v", it.Key())
+	it.SeekGE(span{5, 6})
+	it.Prev()
+	it.Next()
+	if !ov.Next() || ov.Item() != (span{15, 16}) {
+		t.Fatalf("Next after plain iteration at valid=%v %v", ov.Valid(), ov.Item())
 	}
-	it.SeekGE(span{50, 53})
-	if !it.Valid() || it.Key() != (span{50, 53}) {
-		t.Fatalf("SeekGE at %v", it.Key())
+	if ov.Next() || ov.Valid() {
+		t.Fatalf("Next past the last overlap is valid at %v", ov.Item())
 	}
-	// With the scan ended, NextOverlap invalidates rather than scanning.
-	it.NextOverlap()
-	if it.Valid() {
-		t.Fatalf("NextOverlap after SeekGE is valid at %v", it.Key())
+	if !it.Valid() || it.Item() != (span{5, 6}) {
+		t.Fatalf("plain iterator disturbed: valid=%v %v", it.Valid(), it.Item())
 	}
-	// And a fresh scan works.
+	for _, q := range []interval.Span[int]{interval.HalfOpen(5, 5), interval.HalfOpen(6, 5)} {
+		if e := m.Overlaps(q); e.Valid() {
+			t.Fatalf("empty span %v overlaps %v", q, e.Item())
+		}
+	}
+	if e := m.Overlaps(interval.Point(5)); !e.Valid() || e.Item() != (span{5, 6}) {
+		t.Fatalf("Point(5) = valid %v %v", e.Valid(), e.Item())
+	}
+	// Seek reuses the iterator for another query.
+	if !ov.Seek(interval.HalfOpen(0, 6)) || ov.Item() != (span{0, 1}) || !ov.Next() || ov.Item() != (span{5, 6}) || ov.Next() {
+		t.Fatal("Seek did not restart the scan")
+	}
+}
+
+// TestPointerEndpoints uses endpoints whose comparator cannot take the zero
+// value, which the augmentation must therefore never compare.
+func TestPointerEndpoints(t *testing.T) {
+	type ps struct{ lo, hi *int }
+	deref := func(a, b *int) int { return cmp.Compare(*a, *b) }
+	m := interval.NewSet(interval.Bounds[ps, *int]{
+		Compare: deref,
+		Key:     func(s ps) *int { return s.lo },
+		End:     func(s ps) *int { return s.hi },
+		HasEnd:  func(s ps) bool { return s.hi != nil },
+	}, aug.WithDegree(2))
+	mk := func(lo, hi int) ps {
+		p := ps{lo: &lo}
+		if hi > lo {
+			p.hi = &hi
+		}
+		return p
+	}
+	for i := -50; i < 50; i++ {
+		m.Upsert(mk(i, i+3))
+		m.Upsert(mk(i, i)) // a point
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	lo, hi := -10, -8
+	for range m.Overlapping(interval.HalfOpen(&lo, &hi)) {
+		n++
+	}
+	// Ranges starting at -12..-9 and points -10, -9.
+	if n != 6 {
+		t.Fatalf("overlapping %d, want 6", n)
+	}
+	for i := -50; i < 50; i += 2 {
+		m.Delete(mk(i, i+3))
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestEmptyIntervalsArePoints checks that with the default HasEnd an
+// interval whose end is not after its start is a point wherever it sits in
+// the tree, and that a custom HasEnd claiming an end for such an interval
+// is rejected at insertion.
+func TestEmptyIntervalsArePoints(t *testing.T) {
+	m := interval.NewSet(interval.BoundsOf[span](cmp.Compare[int]), aug.WithDegree(2))
+	m.Upsert(span{3, 3})
+	collect := func(q interval.Span[int]) (got []span) {
+		for s := range m.Overlapping(q) {
+			got = append(got, s)
+		}
+		return got
+	}
+	if got := collect(interval.HalfOpen(3, 4)); !slices.Equal(got, []span{{3, 3}}) {
+		t.Fatalf("alone in a leaf: %v", got)
+	}
+	if got := collect(interval.HalfOpen(2, 3)); len(got) != 0 {
+		t.Fatalf("[2,3) should not cover the point 3: %v", got)
+	}
+	// Split the leaf many times over; the answer must not change.
+	for i := range 200 {
+		m.Upsert(span{i * 10, i*10 + 1})
+	}
+	if got := collect(interval.HalfOpen(3, 4)); !slices.Contains(got, span{3, 3}) {
+		t.Fatalf("[3,3) lost after the leaf split: %v", got)
+	}
+	// A reversed interval is also a point at its start.
+	m.Upsert(span{50, 40})
+	if got := collect(interval.Point(50)); !slices.Contains(got, span{50, 40}) {
+		t.Fatalf("reversed interval not found as a point: %v", got)
+	}
+	if got := collect(interval.HalfOpen(41, 49)); slices.Contains(got, span{50, 40}) {
+		t.Fatalf("reversed interval matched inside its reversed range: %v", got)
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+	// A custom HasEnd that claims an end for an empty range is a bug the
+	// tree reports at insertion.
+	b := interval.BoundsOf[span](cmp.Compare[int])
+	b.HasEnd = func(span) bool { return true }
+	bad := interval.NewSet(b)
+	defer func() {
+		if recover() == nil {
+			t.Fatal("inserting [3,3) with HasEnd true did not panic")
+		}
+	}()
+	bad.Upsert(span{3, 3})
+}
+
+// TestTieBreakCannotReorderStarts checks that a tie-breaker preferring
+// ends cannot break the start ordering overlap searches rely on.
+func TestTieBreakCannotReorderStarts(t *testing.T) {
+	b := interval.BoundsOf[span](cmp.Compare[int])
+	b.TieBreak = func(a, c span) int { return cmp.Compare(a.hi, c.hi) }
+	m := interval.NewSet(b)
+	for _, s := range []span{{0, 8}, {10, 11}, {5, 20}} {
+		m.Upsert(s)
+	}
 	var got []span
-	for it.FirstOverlap(span{50, 51}); it.Valid(); it.NextOverlap() {
-		got = append(got, it.Key())
+	for s := range m.Overlapping(interval.HalfOpen(6, 7)) {
+		got = append(got, s)
 	}
-	if want := []span{{48, 51}, {50, 53}}; !slices.Equal(got, want) {
-		t.Fatalf("scan after seek: %v, want %v", got, want)
+	if want := []span{{0, 8}, {5, 20}}; !slices.Equal(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// TestDefaultEqualityNormalizesPoints checks that the default tie-break
+// treats every representation of a point at the same key as the same item.
+func TestDefaultEqualityNormalizesPoints(t *testing.T) {
+	m := interval.NewSet(interval.BoundsOf[span](cmp.Compare[int]))
+	m.Upsert(span{5, 2}) // reversed: a point at 5
+	if _, replaced := m.Upsert(span{5, 5}); !replaced {
+		t.Fatal("{5,5} did not replace the reversed point {5,2}")
+	}
+	if m.Len() != 1 {
+		t.Fatalf("len %d", m.Len())
+	}
+	if got, ok := m.Get(span{5, 0}); !ok || got != (span{5, 5}) {
+		t.Fatalf("Get = %v %v", got, ok)
+	}
+	m.Upsert(span{5, 9}) // a range at the same start is a different item
+	if m.Len() != 2 {
+		t.Fatalf("len %d after adding a range", m.Len())
+	}
+	// The set API: iterators and cursors expose items only.
+	it := m.Iterator()
+	if !it.First() || it.Item() != (span{5, 5}) || !it.Next() || it.Item() != (span{5, 9}) {
+		t.Fatal("set iterator order")
+	}
+	c := m.Cursor()
+	if !c.SeekExact(span{5, 5}) {
+		t.Fatal("SeekExact")
+	}
+	if removed := c.Delete(); removed != (span{5, 5}) || !c.Valid() || c.Item() != (span{5, 9}) {
+		t.Fatalf("cursor Delete = %v, now at valid=%v %v", removed, c.Valid(), c.Item())
+	}
+	if removed, ok := m.Delete(span{5, 9}); !ok || removed != (span{5, 9}) {
+		t.Fatalf("Delete = %v %v", removed, ok)
 	}
 }

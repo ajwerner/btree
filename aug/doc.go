@@ -16,7 +16,24 @@
 // shared by the btree, orderstat and interval packages and is exported so
 // that users can define their own augmentations.
 //
-// # Ownership and concurrency
+// # Ownership
+//
+// The same contract holds for every collection in this module:
+//
+//   - New constructs a collection; its zero value is not usable, and it
+//     must not be copied by value.
+//   - Clone returns another collection that may be mutated independently
+//     of the original, in constant time; the two share nodes until one
+//     writes them.
+//   - Iterators and cursors borrow the collection they came from and
+//     observe it as it is when they are positioned; sequence views (All,
+//     Range, ...) observe it each time they are ranged over.
+//   - A mutation invalidates every borrowed position on that collection
+//     except the cursor performing it; positioning again is always safe.
+//   - Clear empties a collection and releases what it shared; the
+//     collection stays usable.
+//
+// # Concurrency
 //
 // A Map owns a reference to its root node; nodes are reference counted and
 // shared between a Map and its clones. A mutation copies each node on the
@@ -29,6 +46,16 @@
 // receiver (it bumps a reference count) and must be serialized with other
 // writes to the receiver, but the returned clone is independent and may be
 // used from another goroutine immediately.
+//
+// A Map must not be copied by value: a copy shares the root without holding
+// a reference to it, so clearing or writing either corrupts the other. Use
+// the pointer New returns, and Clone for a second handle.
+//
+// Keys, values and augmentations are copied shallowly when a node is
+// copied on write, so a map, its clones and their free-listed nodes may
+// share any references they contain. Treat a key or augmentation that
+// holds a reference as immutable once stored, and have Monoid operations
+// return fresh values rather than modify their arguments.
 //
 // Clear releases the Map's reference to its nodes. Nodes that no other Map
 // references are returned to the free list. A Map that is dropped without

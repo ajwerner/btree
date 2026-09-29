@@ -35,8 +35,9 @@ const MaxDegree = math.MaxInt16 / 2
 // heavier churn should size its own free list with WithFreeList.
 const DefaultFreeListSize = 256
 
-// Config holds a Map's comparison function and Updater. Augmentation code
-// reaches it through LowLevelIterator.Config.
+// Config holds a Map's comparison function and Updater, fixed at
+// construction. Augmentation code reaches a copy through
+// LowLevelIterator.Config.
 type Config[K, V, A any] struct {
 
 	// Updater is used to update the augmentations to the tree.
@@ -47,6 +48,15 @@ type Config[K, V, A any] struct {
 
 // Updater is used to update the augmentation of the node when the subtree
 // changes.
+//
+// The tree tells an Updater about every entry that enters, leaves or is
+// replaced below a node, which is all an augmentation that depends only
+// on the entries of the subtree (counts, sums, bounds) needs. An
+// augmentation that depends on the shape of the subtree (node counts,
+// heights) must also implement Restructurer to hear about splits, merges
+// and rebalances, and should recompute from its children on every event.
+//
+// An Updater may implement Equaler to give Verify its notion of equality.
 type Updater[K, V, A any] interface {
 
 	// Update should update the augmentation of the passed node, optionally
@@ -54,6 +64,17 @@ type Updater[K, V, A any] interface {
 	// augmentation changed, and thus, changes should occur in the ancestors
 	// of the subtree rooted at this node, return true.
 	Update(*Node[K, V, A], UpdateInfo[K, V, A]) (changed bool)
+}
+
+// Restructurer may be implemented by an Updater whose augmentation depends
+// on the shape of the subtree rather than only on its entries. Restructured
+// is called on a node after a child of it was split, or after two of its
+// children were merged or rebalanced, with the entries below it unchanged;
+// it should recompute the node's augmentation and report whether it
+// changed, in which case the ancestors are told through the event that
+// caused the change or through Restructured.
+type Restructurer[K, V, A any] interface {
+	Restructured(*Node[K, V, A]) (changed bool)
 }
 
 // UpdateInfo is used to describe the update operation.
@@ -116,12 +137,13 @@ const (
 )
 
 // Compare compares two values using the same comparison function as the Map.
-func (c *Config[K, V, A]) Compare(a, b K) int { return c.cmp(a, b) }
+func (c Config[K, V, A]) Compare(a, b K) int { return c.cmp(a, b) }
 
 type config[K, V, A any] struct {
 	Config[K, V, A]
 	find       func(*Node[K, V, A], K) (int, bool) // nil: binary search with cmp
-	monoid     Monoid[K, V, A]                     // set when Updater came from MonoidUpdater
+	restr      Restructurer[K, V, A]               // set when Updater implements it
+	monoid     CommutativeMonoid[K, V, A]          // set when Updater came from MonoidUpdater
 	folder     Folder[K, V, A]                     // set when the monoid implements Folder
 	fl         FreeList[K, V, A]
 	maxEntries int
@@ -184,9 +206,14 @@ func makeConfig[K, V, A any](
 	} else {
 		fl = NewFreeList[K, V, A](DefaultFreeListSize)
 	}
-	var m Monoid[K, V, A]
+	if cmp == nil {
+		panic("btree: a comparison function is required")
+	}
+	var m CommutativeMonoid[K, V, A]
 	var f Folder[K, V, A]
-	if mu, ok := up.(interface{ monoid() Monoid[K, V, A] }); ok {
+	if mu, ok := up.(interface {
+		monoid() CommutativeMonoid[K, V, A]
+	}); ok {
 		m = mu.monoid()
 		f, _ = m.(Folder[K, V, A])
 	}
@@ -194,9 +221,11 @@ func makeConfig[K, V, A any](
 	if o.find != nil {
 		find, _ = o.find.(func(*Node[K, V, A], K) (int, bool))
 	}
+	restr, _ := up.(Restructurer[K, V, A])
 	return config[K, V, A]{
 		Config:     Config[K, V, A]{Updater: up, cmp: cmp},
 		find:       find,
+		restr:      restr,
 		monoid:     m,
 		folder:     f,
 		fl:         fl,

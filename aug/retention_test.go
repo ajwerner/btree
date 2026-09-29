@@ -15,6 +15,7 @@
 package aug_test
 
 import (
+	"cmp"
 	"fmt"
 	"math/rand/v2"
 	"runtime"
@@ -139,7 +140,7 @@ func TestPointerTypesUnderGCPressure(t *testing.T) {
 			m.Delete(k)
 			delete(ref, k)
 		case 3:
-			if c.SeekGE(k) {
+			if c.SeekExact(k) {
 				c.Delete()
 				delete(ref, k)
 			}
@@ -166,6 +167,42 @@ func TestPointerTypesUnderGCPressure(t *testing.T) {
 				if !ok || got != v {
 					t.Fatalf("Get(%s) = %p %v, want %p", k, got, ok, v)
 				}
+			}
+		}
+	}
+}
+
+// TestVerifyWhileCloningAndClearing runs Verify on a snapshot while the
+// original is cloned, written and cleared from another goroutine, which
+// changes the reference counts of nodes the snapshot shares.
+func TestVerifyWhileCloningAndClearing(t *testing.T) {
+	m := aug.NewMonoid[int, int, int](cmp.Compare[int], aug.Count[int, int]{}, aug.WithDegree(4))
+	for i := range 5000 {
+		m.Upsert(i, i)
+	}
+	snap := m.Clone()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := range 300 {
+			c := m.Clone()
+			c.Upsert(i, -i)
+			c.Delete(i + 1)
+			c.Clear()
+		}
+	}()
+	for {
+		select {
+		case <-done:
+			if err := snap.Verify(); err != nil {
+				t.Fatal(err)
+			}
+			snap.Clear()
+			m.Clear()
+			return
+		default:
+			if err := snap.Verify(); err != nil {
+				t.Fatal(err)
 			}
 		}
 	}

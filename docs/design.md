@@ -18,9 +18,10 @@ fix the augmentation and add the queries it enables. Each wrapper is a
 defined type over the `aug` type (`type Map[K, V any] aug.Map[K, V,
 struct{}]`) with explicit forwarding methods, so it has the same memory
 representation, the conversion is free, `New` and `Clone` allocate once,
-and a method call is a direct call. Embedding a pointer would have meant a
-second allocation and an indirection per call. `aug.MonoidMap` likewise
-embeds `Map` by value.
+a method call is a direct call, and nothing of the core is reachable
+through an exported field. `aug.MonoidMap` is a defined type over
+`aug.Map` the same way. `Node.Aug` and `ChildAug` return values;
+`Node.SetAug` is for Updaters.
 
 ## Nodes
 
@@ -89,18 +90,22 @@ spilled most of them to the GC.
 ## Augmentation
 
 Each node carries an `A`. An `Updater` is called with the node and an
-`UpdateInfo` after every structural change: `Insertion` and `Removal` of an
-entry below the node (with the moved subtree's aggregate on rebalances),
+`UpdateInfo` after every change to the entries below it: `Insertion` and
+`Removal` of an entry (with the moved subtree's aggregate on rebalances),
 `Split` (the node is the left half; the right half's aggregate is given),
 `Replacement` of an entry at its position (with an equal key, or, for an
 in-place `Cursor.Rekey`, a key that still sorts between the same
-neighbours), and `Default` (recompute from scratch). The return value says whether the node's aggregate changed and so
-whether ancestors need updating; the write paths stop propagating as soon
-as it is false.
+neighbours), and `Default` (recompute from scratch). The return value says
+whether the node's aggregate changed and so whether ancestors need updating;
+the write paths stop propagating as soon as it is false. A split, merge or
+rebalance leaves the entries below a node unchanged, so an augmentation
+that is a function of those entries needs nothing; one that depends on
+the shape of the subtree implements `Restructurer` and is called on the
+node whose children changed. Nodes start from the monoid's `Identity`.
 
-Most augmentations are commutative monoids: an aggregate is `Combine`
-folded over `Of` of every entry, in whatever order the operations produce
-them. `MonoidUpdater` implements `Updater` for any `Monoid`, in
+Most augmentations are commutative monoids (`CommutativeMonoid`: an
+`Identity`, `Of` and `Combine`): an aggregate is `Combine` folded over `Of`
+of every entry, in whatever order the operations produce them. `MonoidUpdater` implements `Updater` for any `Monoid`, in
 O(1) per level for `Group`s (which can `Uncombine`) and by recomputing the
 node otherwise. An optional `Equaler` supplies the changed check and an
 optional `Folder` folds a span of a node in one call, which matters because
@@ -111,16 +116,21 @@ building blocks; orderstat is `Count`.
 queries, so a plain map cannot expose methods that would panic: `Total`,
 `Prefix(key)` (aggregate of all smaller keys, one descent) and
 `Aggregate(lo, hi)` (two boundary paths) on the map, and `Prefix()` at the
-position and `SeekWhere(pred)`, one descent to the first entry where a
-monotone predicate on the running prefix flips, on its iterators and
-cursors. `SeekWhere` pays a predicate and a `Combine` per child
-visited; orderstat's `SeekNth` is a native descent by counts for that
-reason.
+position and `SeekPrefix(pred)`, one descent to the first entry whose
+inclusive prefix satisfies a predicate that turns from false to true at
+most once, on its iterators and cursors. `SeekPrefix` pays a predicate and
+a `Combine` per child visited; orderstat's `SeekNth` is a native descent
+by counts for that reason. The contract is deliberately narrow: the
+descent never backtracks, so a predicate that accepts a subtree must be
+satisfied by some entry in it.
 
 The interval bound is a monoid without an inverse whose useful queries are
 not prefix-shaped, so `interval` implements `Updater` directly and its
-overlap scan works on the `LowLevelIterator` (`Descend`, `Ascend`,
-`ChildAug`, `Frame`).
+overlap scan, `OverlapIterator`, works on the `LowLevelIterator`
+(`Descend`, `Ascend`, `ChildAug`, `Frame`). Queries are `Span`s
+(`HalfOpen`, `Point`) rather than stored intervals, and the tree orders
+intervals by start with `Bounds.TieBreak` deciding only among equal
+starts, because the scan relies on start order.
 
 Prefixes are computed lazily by walking the iterator's frames. An eager
 per-frame prefix would make `Rank()` O(1) after `Next` at the cost of a
@@ -132,8 +142,12 @@ per-frame prefix would make `Rank()` O(1) after `Next` at the cost of a
 `Iterator` is a stateful cursor with an inline stack of ten frames (node,
 position); it spills to the heap only for trees deeper than that, which
 means degree 2 or 3 at large sizes. `Valid`, `Key`, `Value`, `Next`, `Prev`
-and the seeks are the whole surface; `Next` past the end and `Prev` before
-the beginning stay invalid, and each steps back in from the other end.
+and the seeks are the whole surface. Every positioning method returns
+whether the iterator is now at an entry, so the answer to "is the key
+present" is `SeekExact`, never the result of `SeekGE`; `Next` past the end
+and `Prev` before the beginning stay invalid, and each steps back in from
+the other end. Set iterators and cursors are their own types with no
+`Value`.
 
 `Cursor` embeds `Iterator` and adds writes at the position. The first write
 pins the path: `mut` on every frame from the root down, updating the child

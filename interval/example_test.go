@@ -35,19 +35,18 @@ func (p pair[T]) second() T { return p[1] }
 
 func Example() {
 	m := interval.NewSet(interval.Bounds[pair[int], int]{
-		Compare:          cmp.Compare[int],
-		Key:              pair[int].first,
-		End:              pair[int].second,
-		CompareIntervals: pair[int].compare,
+		Compare:  cmp.Compare[int],
+		Key:      pair[int].first,
+		End:      pair[int].second,
+		TieBreak: pair[int].compare,
 	})
 	for _, p := range []pair[int]{
 		{1, 2}, {2, 3}, {1, 5}, {0, 6}, {2, 7},
 	} {
 		m.Upsert(p)
 	}
-	it := m.Iterator()
-	for it.FirstOverlap(pair[int]{4, 5}); it.Valid(); it.NextOverlap() {
-		fmt.Println(it.Key())
+	for p := range m.Overlapping(interval.HalfOpen(4, 5)) {
+		fmt.Println(p)
 	}
 	// Output:
 	// [0 6]

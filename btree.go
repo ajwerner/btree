@@ -15,6 +15,20 @@
 // Package btree provides copy-on-write ordered maps and sets backed by a
 // B-tree. See package aug for the ownership and concurrency rules, and the
 // orderstat and interval packages for augmented variants.
+//
+// # Comparison
+//
+// A map or set is ordered, and its entries identified, by a comparison
+// function: cmp(a, b) is negative, zero or positive as a sorts before, with
+// or after b, and must be a total order (in particular, transitive). Two
+// keys that compare equal are the same key, so an Upsert of a key equal to
+// a stored one replaces it, and Set.Get returns the stored item for an
+// equal probe. Data that the comparison reads must not change while the
+// key is stored.
+//
+// NewOrdered and NewOrderedSet order keys with <, as cmp.Compare does
+// except for floating-point NaN, which they cannot place; use New with
+// cmp.Compare for keys that may be NaN.
 package btree
 
 import (
@@ -61,6 +75,9 @@ func (m *Map[K, V]) Upsert(k K, v V) (replacedK K, replacedV V, replaced bool) {
 
 // Get returns the value for k, if any.
 func (m *Map[K, V]) Get(k K) (v V, ok bool) { return m.a().Get(k) }
+
+// Lookup returns the stored entry whose key compares equal to k, if any.
+func (m *Map[K, V]) Lookup(k K) (key K, v V, ok bool) { return m.a().Lookup(k) }
 
 // Len returns the number of entries.
 func (m *Map[K, V]) Len() int { return m.a().Len() }
@@ -134,16 +151,23 @@ func (s *Set[T]) Upsert(item T) (replaced T, overwrote bool) {
 	return replaced, overwrote
 }
 
-// Delete removes item, reporting whether it was present.
-func (s *Set[T]) Delete(item T) (removed bool) {
-	_, _, removed = s.m().Delete(item)
-	return removed
+// Delete removes the item equal to item and returns it.
+func (s *Set[T]) Delete(item T) (removed T, ok bool) {
+	removed, _, ok = s.m().Delete(item)
+	return removed, ok
 }
 
-// Contains reports whether item is in the set.
+// Contains reports whether an item equal to item is in the set.
 func (s *Set[T]) Contains(item T) bool {
-	_, ok := s.m().Get(item)
+	_, ok := s.m().a().Get(item)
 	return ok
+}
+
+// Get returns the item in the set equal to probe, if any. Items that
+// compare equal may differ in fields the comparison ignores.
+func (s *Set[T]) Get(probe T) (item T, found bool) {
+	item, _, found = s.m().a().Lookup(probe)
+	return item, found
 }
 
 // Len returns the number of items.
@@ -165,10 +189,10 @@ func (s *Set[T]) String() string { return s.m().String() }
 func (s *Set[T]) Verify() error { return s.m().Verify() }
 
 // Iterator returns a new iterator positioned before the first item.
-func (s *Set[T]) Iterator() SetIterator[T] { return s.m().Iterator() }
+func (s *Set[T]) Iterator() SetIterator[T] { return SetIterator[T]{it: s.m().Iterator()} }
 
 // Cursor returns a new cursor positioned before the first item.
-func (s *Set[T]) Cursor() SetCursor[T] { return s.m().Cursor() }
+func (s *Set[T]) Cursor() SetCursor[T] { return SetCursor[T]{c: s.m().Cursor()} }
 
 // All returns an iterator over every item in order.
 func (s *Set[T]) All() iter.Seq[T] { return keys(s.m().All()) }
@@ -231,12 +255,121 @@ func WithFreeList[K, V any](fl FreeList[K, V]) Option {
 // MapIterator is an iterator for a Map.
 type MapIterator[K, V any] = aug.Iterator[K, V, struct{}]
 
-// SetIterator is an iterator for a Set.
-type SetIterator[T any] = MapIterator[T, struct{}]
-
 // MapCursor is a cursor for a Map: an iterator that can mutate the entry it
 // is positioned on. See aug.Cursor.
 type MapCursor[K, V any] = aug.Cursor[K, V, struct{}]
 
-// SetCursor is a cursor for a Set. See aug.Cursor.
-type SetCursor[T any] = MapCursor[T, struct{}]
+// SetIterator iterates over a set. Every positioning method reports whether
+// the iterator is now at an item.
+type SetIterator[T any] struct {
+	it MapIterator[T, struct{}]
+}
+
+// Reset marks the iterator invalid, before the first item.
+func (i *SetIterator[T]) Reset() { i.it.Reset() }
+
+// First positions the iterator at the smallest item.
+func (i *SetIterator[T]) First() bool { return i.it.First() }
+
+// Last positions the iterator at the largest item.
+func (i *SetIterator[T]) Last() bool { return i.it.Last() }
+
+// Next positions the iterator at the following item.
+func (i *SetIterator[T]) Next() bool { return i.it.Next() }
+
+// Prev positions the iterator at the preceding item.
+func (i *SetIterator[T]) Prev() bool { return i.it.Prev() }
+
+// SeekGE positions the iterator at the first item >= item.
+func (i *SetIterator[T]) SeekGE(item T) bool { return i.it.SeekGE(item) }
+
+// SeekGT positions the iterator at the first item > item.
+func (i *SetIterator[T]) SeekGT(item T) bool { return i.it.SeekGT(item) }
+
+// SeekLE positions the iterator at the last item <= item.
+func (i *SetIterator[T]) SeekLE(item T) bool { return i.it.SeekLE(item) }
+
+// SeekLT positions the iterator at the last item < item.
+func (i *SetIterator[T]) SeekLT(item T) bool { return i.it.SeekLT(item) }
+
+// SeekExact positions the iterator at item and reports whether it is in
+// the set; if not, the iterator is at the first greater item.
+func (i *SetIterator[T]) SeekExact(item T) bool { return i.it.SeekExact(item) }
+
+// Valid reports whether the iterator is at an item.
+func (i *SetIterator[T]) Valid() bool { return i.it.Valid() }
+
+// Item returns the item at the iterator's position, which must be valid.
+func (i *SetIterator[T]) Item() T { return i.it.Key() }
+
+// Compare compares two items with the set's comparison function.
+func (i *SetIterator[T]) Compare(a, b T) int { return i.it.Compare(a, b) }
+
+// SetCursor is a SetIterator that can also mutate the set at its position;
+// see aug.Cursor for the rules.
+type SetCursor[T any] struct {
+	c MapCursor[T, struct{}]
+}
+
+// Reset marks the cursor invalid, before the first item.
+func (c *SetCursor[T]) Reset() { c.c.Reset() }
+
+// First positions the cursor at the smallest item.
+func (c *SetCursor[T]) First() bool { return c.c.First() }
+
+// Last positions the cursor at the largest item.
+func (c *SetCursor[T]) Last() bool { return c.c.Last() }
+
+// Next positions the cursor at the following item.
+func (c *SetCursor[T]) Next() bool { return c.c.Next() }
+
+// Prev positions the cursor at the preceding item.
+func (c *SetCursor[T]) Prev() bool { return c.c.Prev() }
+
+// SeekGE positions the cursor at the first item >= item.
+func (c *SetCursor[T]) SeekGE(item T) bool { return c.c.SeekGE(item) }
+
+// SeekGT positions the cursor at the first item > item.
+func (c *SetCursor[T]) SeekGT(item T) bool { return c.c.SeekGT(item) }
+
+// SeekLE positions the cursor at the last item <= item.
+func (c *SetCursor[T]) SeekLE(item T) bool { return c.c.SeekLE(item) }
+
+// SeekLT positions the cursor at the last item < item.
+func (c *SetCursor[T]) SeekLT(item T) bool { return c.c.SeekLT(item) }
+
+// SeekExact positions the cursor at item and reports whether it is in the
+// set; if not, the cursor is at the first greater item.
+func (c *SetCursor[T]) SeekExact(item T) bool { return c.c.SeekExact(item) }
+
+// Valid reports whether the cursor is at an item.
+func (c *SetCursor[T]) Valid() bool { return c.c.Valid() }
+
+// Item returns the item at the cursor's position, which must be valid.
+func (c *SetCursor[T]) Item() T { return c.c.Key() }
+
+// Compare compares two items with the set's comparison function.
+func (c *SetCursor[T]) Compare(a, b T) int { return c.c.Compare(a, b) }
+
+// Delete removes the current item and returns it, leaving the cursor on
+// the following item or past the end; see aug.Cursor.Delete.
+func (c *SetCursor[T]) Delete() T {
+	item, _ := c.c.Delete()
+	return item
+}
+
+// Rekey replaces the current item with item, which may sort elsewhere,
+// and returns any other item equal to it that was displaced. Afterwards
+// the cursor is on item.
+func (c *SetCursor[T]) Rekey(item T) (displaced T, ok bool) {
+	displaced, _, ok = c.c.Rekey(item)
+	return displaced, ok
+}
+
+// Upsert inserts item, or replaces the equal item already present and
+// returns it, using the cursor's position as a hint. Afterwards the cursor
+// is on item.
+func (c *SetCursor[T]) Upsert(item T) (replaced T, ok bool) {
+	replaced, _, ok = c.c.Upsert(item, struct{}{})
+	return replaced, ok
+}
