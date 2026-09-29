@@ -22,8 +22,11 @@ import "fmt"
 const DefaultDegree = 16
 
 // DefaultFreeListSize is the capacity of the free list created by New when
-// WithFreeList is not given.
-const DefaultFreeListSize = 32
+// WithFreeList is not given. A clone that is written to and then cleared
+// frees about one node per touched root-to-leaf path, so a workload that
+// clones, applies a few hundred writes and clears fits within the default;
+// heavier churn should size its own free list with WithFreeList.
+const DefaultFreeListSize = 256
 
 // Config is used to configure the tree. It consists of a comparison function
 // for keys and any auxiliary data provided by the instantiator. It is provided

@@ -33,6 +33,10 @@ Writes to a map must be serialized by the caller; any number of goroutines may r
 
 The `aug` package exposes the tree with a per-node augmentation of type `A` maintained through an `Updater`, plus a `LowLevelIterator` for implementing searches guided by the augmentation. The `orderstat` and `interval` packages are built on it.
 
+## Performance
+
+Against google/btree v1.1.3 at equal degree, point operations (insert, get, delete, seek and scan) are at parity or ahead by 5-15%. On a scheduler-shaped workload (clone a 20k-entry map with 24-byte keys, move 200 entries to new keys, release the clone) a round takes 50 µs with delete + upsert and 42 µs through a `Cursor`, against 53 µs for google/btree at degree 16, with two allocations per round. Numbers and method are in `docs/review-2026-09-29.md`.
+
 ## Interval Trees
 
 The `interval` package provides interval trees for efficiently finding all intervals that overlap a query range. The iterator supports `FirstOverlap()` and `NextOverlap()` methods for querying overlapping intervals.

@@ -73,6 +73,21 @@ func BenchmarkSeekNth(b *testing.B) {
 	}
 }
 
+func BenchmarkSeekNthViaSeekWhere(b *testing.B) {
+	for _, n := range []int{10_000, 1_000_000} {
+		s, p := benchSet(n)
+		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
+			it := s.Iterator()
+			i := 0
+			for b.Loop() {
+				nth := p[i%n]
+				it.SeekWhere(func(prefix, contribution int) bool { return prefix+contribution > nth })
+				i++
+			}
+		})
+	}
+}
+
 func BenchmarkCount(b *testing.B) {
 	for _, n := range []int{10_000, 1_000_000} {
 		s, p := benchSet(n)

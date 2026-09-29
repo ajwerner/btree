@@ -204,13 +204,43 @@ func (it *Iterator[K, V]) Rank() int {
 // nth entries before it. If nth is out of range the iterator is left
 // invalid.
 func (it *Iterator[K, V]) SeekNth(nth int) {
-	if nth < 0 {
-		it.Reset()
+	seekNth(aug.LowLevel(&it.Iterator), nth)
+}
+
+// seekNth descends by subtree counts. It is what SeekWhere does with a
+// rank predicate, without the calls per child.
+func seekNth[K, V any](ll *aug.LowLevelIterator[K, V, int], nth int) {
+	it := (*aug.Iterator[K, V, int])(ll)
+	it.Reset()
+	n := ll.Node()
+	if n == nil || nth < 0 || nth >= *n.GetA() {
+		if n != nil && nth >= 0 {
+			ll.SetPos(n.Count())
+		}
 		return
 	}
-	it.SeekWhere(func(prefix, contribution int) bool {
-		return prefix+contribution > nth
-	})
+	for {
+		n = ll.Node()
+		if n.IsLeaf() {
+			ll.SetPos(int16(nth))
+			return
+		}
+		pos := int16(0)
+		for ; ; pos++ {
+			c := *n.GetChild(pos)
+			if nth < c {
+				break
+			}
+			nth -= c
+			if nth == 0 {
+				ll.SetPos(pos)
+				return
+			}
+			nth--
+		}
+		ll.SetPos(pos)
+		ll.Descend()
+	}
 }
 
 // Cursor is an Iterator that can also mutate the collection at its
@@ -227,11 +257,5 @@ func (c *Cursor[K, V]) Rank() int {
 // SeekNth seeks the cursor to the entry with rank nth. If nth is out of
 // range the cursor is left invalid.
 func (c *Cursor[K, V]) SeekNth(nth int) {
-	if nth < 0 {
-		c.Reset()
-		return
-	}
-	c.SeekWhere(func(prefix, contribution int) bool {
-		return prefix+contribution > nth
-	})
+	seekNth(aug.LowLevel(&c.Iterator), nth)
 }
