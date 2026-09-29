@@ -38,6 +38,11 @@ func (t *Map[K, V]) Iterator() Iterator[K, V] {
 	return Iterator[K, V]{Iterator: t.Map.Iterator()}
 }
 
+// Cursor constructs a new Cursor for this Map.
+func (t *Map[K, V]) Cursor() Cursor[K, V] {
+	return Cursor[K, V]{Cursor: t.Map.Cursor()}
+}
+
 // Clone clones the Map, lazily. It does so in constant time.
 func (t *Map[K, V]) Clone() *Map[K, V] {
 	return &Map[K, V]{Map: t.Map.Clone()}
@@ -105,6 +110,11 @@ func (t *Set[T]) Iterator() Iterator[T, struct{}] {
 	return (*Map[T, struct{}])(t).Iterator()
 }
 
+// Cursor constructs a cursor for this set.
+func (t *Set[T]) Cursor() Cursor[T, struct{}] {
+	return (*Map[T, struct{}])(t).Cursor()
+}
+
 // Rank returns the number of items less than item, and whether item is in
 // the set.
 func (t *Set[T]) Rank(item T) (rank int, found bool) {
@@ -154,6 +164,29 @@ func (it *Iterator[K, V]) SeekNth(nth int) {
 		return
 	}
 	it.SeekWhere(func(prefix, contribution int) bool {
+		return prefix+contribution > nth
+	})
+}
+
+// Cursor is an Iterator that can also mutate the collection at its
+// position. See aug.Cursor.
+type Cursor[K, V any] struct {
+	aug.Cursor[K, V, int]
+}
+
+// Rank returns the number of entries before the cursor's position.
+func (c *Cursor[K, V]) Rank() int {
+	return c.Prefix()
+}
+
+// SeekNth seeks the cursor to the entry with rank nth. If nth is out of
+// range the cursor is left invalid.
+func (c *Cursor[K, V]) SeekNth(nth int) {
+	if nth < 0 {
+		c.Reset()
+		return
+	}
+	c.SeekWhere(func(prefix, contribution int) bool {
 		return prefix+contribution > nth
 	})
 }

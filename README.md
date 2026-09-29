@@ -20,6 +20,8 @@ for it.First(); it.Valid(); it.Next() {
 snapshot.Clear() // returns nodes only this tree references to the free list
 ```
 
+A `Cursor` is an iterator that can also mutate the entry it is on and stay valid: `SetValue`, `Delete` (leaves the cursor on the successor), `Rekey` (moves the entry to a new key) and a hinted `Upsert`. Each acts in place when the leaf allows it and otherwise falls back to the top-down algorithm plus a re-seek, so "seek, then move this entry" costs one descent instead of three.
+
 Writes to a map must be serialized by the caller; any number of goroutines may read a map, or a clone of it, while no goroutine writes it. See the `aug` package documentation for details.
 
 ## Augmentations

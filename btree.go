@@ -98,3 +98,10 @@ type MapIterator[K, V any] = aug.Iterator[K, V, struct{}]
 
 // SetIterator is an iterator for a Set.
 type SetIterator[T any] = MapIterator[T, struct{}]
+
+// MapCursor is a cursor for a Map: an iterator that can mutate the entry it
+// is positioned on. See aug.Cursor.
+type MapCursor[K, V any] = aug.Cursor[K, V, struct{}]
+
+// SetCursor is a cursor for a Set. See aug.Cursor.
+type SetCursor[T any] = MapCursor[T, struct{}]

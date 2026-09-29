@@ -65,6 +65,15 @@ func (is *iterStack[K, V, A]) at(d int) iterFrame[K, V, A] {
 	return is.a[d]
 }
 
+// setNode replaces the node of the frame at depth d.
+func (is *iterStack[K, V, A]) setNode(d int, n *Node[K, V, A]) {
+	if is.aLen == -1 {
+		is.s[d].node = n
+		return
+	}
+	is.a[d].node = n
+}
+
 func (is *iterStack[K, V, A]) len() int {
 	if is.aLen == -1 {
 		return len(is.s)
