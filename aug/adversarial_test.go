@@ -186,9 +186,14 @@ func TestVerifyInterfaceTypes(t *testing.T) {
 }
 
 // nodeCounter is a shape-dependent augmentation: the number of nodes in
-// the subtree. It recomputes from its children on every event, as the
-// Updater documentation prescribes for such augmentations.
+// the subtree. It recomputes from its children on every event and
+// implements Restructurer, as the Updater documentation prescribes for
+// such augmentations.
 type nodeCounter[K, V any] struct{}
+
+func (u nodeCounter[K, V]) Restructured(n *aug.Node[K, V, int]) bool {
+	return u.Update(n, aug.UpdateInfo[K, V, int]{})
+}
 
 func (nodeCounter[K, V]) Update(n *aug.Node[K, V, int], _ aug.UpdateInfo[K, V, int]) bool {
 	count := 1

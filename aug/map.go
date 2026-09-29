@@ -144,9 +144,9 @@ func (t *Map[K, V, A]) Upsert(item K, value V) (replacedK K, replacedV V, replac
 	return replacedK, replacedV, replaced
 }
 
-// Iterator returns a new Iterator object. It is not safe to continue using an
-// Iterator after modifications are made to the tree. If modifications are made,
-// create a new Iterator.
+// Iterator returns a new Iterator positioned before the first entry. A
+// mutation of the Map invalidates the Iterator's position; reposition it
+// (Reset, First, a Seek) before using it again.
 func (t *Map[K, V, A]) Iterator() Iterator[K, V, A] {
 	it := Iterator[K, V, A]{r: t}
 	it.Reset()

@@ -27,6 +27,7 @@
 package interval
 
 import (
+	"fmt"
 	"iter"
 
 	"github.com/ajwerner/btree/aug"
@@ -63,8 +64,14 @@ type Bounds[I, K any] struct {
 	// intervals being ordered by start, so it is consulted only after the
 	// starts compare equal. It is optional: by default points sort before
 	// ranges, then ranges by End, and intervals equal by those are the same
-	// key.
+	// key; an interval whose end is not after its start is a point here as
+	// everywhere else.
 	TieBreak func(I, I) int
+
+	// CompareIntervals, when set, replaces the Key-then-TieBreak comparison
+	// with a single call, which saves two indirect calls per probe. It must
+	// order intervals by Key first; Verify reports a tree that is not.
+	CompareIntervals func(I, I) int
 }
 
 // Interval is implemented by interval types that expose their own bounds:
@@ -94,28 +101,34 @@ func (b Bounds[I, K]) withDefaults() Bounds[I, K] {
 	}
 	if b.TieBreak == nil {
 		b.TieBreak = func(x, y I) int {
-			xEnd, yEnd := b.HasEnd(x), b.HasEnd(y)
+			xPoint, yPoint := b.isPoint(x), b.isPoint(y)
 			switch {
-			case xEnd && yEnd:
+			case !xPoint && !yPoint:
 				return b.Compare(b.End(x), b.End(y))
-			case xEnd:
-				return 1
-			case yEnd:
+			case xPoint && yPoint:
+				return 0
+			case xPoint:
 				return -1
 			default:
-				return 0
+				return 1
 			}
+		}
+	}
+	if b.CompareIntervals == nil {
+		b.CompareIntervals = func(x, y I) int {
+			if c := b.Compare(b.Key(x), b.Key(y)); c != 0 {
+				return c
+			}
+			return b.TieBreak(x, y)
 		}
 	}
 	return b
 }
 
-// compare orders intervals by start, then by TieBreak.
-func (b Bounds[I, K]) compare(x, y I) int {
-	if c := b.Compare(b.Key(x), b.Key(y)); c != 0 {
-		return c
-	}
-	return b.TieBreak(x, y)
+// isPoint reports whether an interval covers only its start key: it has no
+// end, or its end is not after its start.
+func (b Bounds[I, K]) isPoint(i I) bool {
+	return !b.HasEnd(i) || b.Compare(b.End(i), b.Key(i)) <= 0
 }
 
 // New constructs a Map over intervals described by b. See aug.WithDegree
@@ -123,7 +136,7 @@ func (b Bounds[I, K]) compare(x, y I) int {
 func New[I, K, V any](b Bounds[I, K], opts ...aug.Option) *Map[I, K, V] {
 	b = b.withDefaults()
 	return (*Map[I, K, V])(aug.New[I, V, subtreeBound[K]](
-		b.compare,
+		b.CompareIntervals,
 		&updater[I, K, V]{
 			cmp:    b.Compare,
 			key:    b.Key,
@@ -190,8 +203,26 @@ func (m *Map[I, K, V]) Compare(a, b I) int { return m.a().Compare(a, b) }
 // String renders the tree in a Newick-like format.
 func (m *Map[I, K, V]) String() string { return m.a().String() }
 
-// Verify checks the tree's invariants; see aug.Map.Verify.
-func (m *Map[I, K, V]) Verify() error { return m.a().Verify() }
+// Verify checks the tree's invariants (see aug.Map.Verify) and that the
+// intervals are ordered by start key, which a custom CompareIntervals must
+// guarantee.
+func (m *Map[I, K, V]) Verify() error {
+	if err := m.a().Verify(); err != nil {
+		return err
+	}
+	it := m.a().Iterator()
+	u := aug.LowLevel(&it).Config().Updater.(*updater[I, K, V])
+	var prev K
+	first := true
+	for i := range m.a().All() {
+		k := u.key(i)
+		if !first && u.cmp(prev, k) > 0 {
+			return fmt.Errorf("interval: CompareIntervals does not order by start key")
+		}
+		prev, first = k, false
+	}
+	return nil
+}
 
 // Iterator returns a new iterator positioned before the first entry.
 func (m *Map[I, K, V]) Iterator() Iterator[I, K, V] { return m.a().Iterator() }
@@ -241,11 +272,31 @@ func NewSet[I, K any](b Bounds[I, K], opts ...aug.Option) *Set[I, K] {
 
 func (s *Set[I, K]) m() *Map[I, K, struct{}] { return (*Map[I, K, struct{}])(s) }
 
-// Overlaps returns an OverlapIterator positioned at the first item that
+// Overlaps returns a SetOverlapIterator positioned at the first item that
 // overlaps span.
-func (s *Set[I, K]) Overlaps(span Span[K]) OverlapIterator[I, K, struct{}] {
-	return s.m().Overlaps(span)
+func (s *Set[I, K]) Overlaps(span Span[K]) SetOverlapIterator[I, K] {
+	return SetOverlapIterator[I, K]{o: s.m().Overlaps(span)}
 }
+
+// SetOverlapIterator visits the items of a Set that overlap a Span, in
+// order of their start keys. See OverlapIterator.
+type SetOverlapIterator[I, K any] struct {
+	o OverlapIterator[I, K, struct{}]
+}
+
+// Seek restarts the iterator at the first item overlapping span and
+// reports whether there is one.
+func (i *SetOverlapIterator[I, K]) Seek(span Span[K]) bool { return i.o.Seek(span) }
+
+// Valid reports whether the iterator is at an overlapping item.
+func (i *SetOverlapIterator[I, K]) Valid() bool { return i.o.Valid() }
+
+// Item returns the item at the iterator's position, which must be valid.
+func (i *SetOverlapIterator[I, K]) Item() I { return i.o.Key() }
+
+// Next positions the iterator at the following overlapping item and
+// reports whether there is one.
+func (i *SetOverlapIterator[I, K]) Next() bool { return i.o.Next() }
 
 // Overlapping returns an iterator over the items that overlap span, in
 // order of their start keys.
@@ -266,16 +317,26 @@ func (s *Set[I, K]) Upsert(item I) (replaced I, overwrote bool) {
 	return replaced, overwrote
 }
 
-// Delete removes item, reporting whether it was present.
-func (s *Set[I, K]) Delete(item I) (removed bool) {
-	_, _, removed = s.m().Delete(item)
-	return removed
+// Delete removes the item equal to item and returns it.
+func (s *Set[I, K]) Delete(item I) (removed I, ok bool) {
+	removed, _, ok = s.m().Delete(item)
+	return removed, ok
 }
 
-// Contains reports whether item is in the set.
+// Contains reports whether an item equal to item is in the set.
 func (s *Set[I, K]) Contains(item I) bool {
-	_, ok := s.m().Get(item)
-	return ok
+	_, found := s.Get(item)
+	return found
+}
+
+// Get returns the item in the set equal to probe, if any. Items that
+// compare equal may differ in fields the comparison ignores.
+func (s *Set[I, K]) Get(probe I) (item I, found bool) {
+	it := s.m().a().Iterator()
+	if it.SeekExact(probe) {
+		return it.Key(), true
+	}
+	return item, false
 }
 
 // Len returns the number of items.
@@ -297,10 +358,10 @@ func (s *Set[I, K]) String() string { return s.m().String() }
 func (s *Set[I, K]) Verify() error { return s.m().Verify() }
 
 // Iterator returns a new iterator positioned before the first item.
-func (s *Set[I, K]) Iterator() Iterator[I, K, struct{}] { return s.m().Iterator() }
+func (s *Set[I, K]) Iterator() SetIterator[I, K] { return SetIterator[I, K]{it: s.m().Iterator()} }
 
 // Cursor returns a new cursor positioned before the first item.
-func (s *Set[I, K]) Cursor() Cursor[I, K, struct{}] { return s.m().Cursor() }
+func (s *Set[I, K]) Cursor() SetCursor[I, K] { return SetCursor[I, K]{c: s.m().Cursor()} }
 
 // All returns an iterator over every item in order.
 func (s *Set[I, K]) All() iter.Seq[I] { return keys(s.m().All()) }
@@ -334,4 +395,119 @@ func keys[T any](seq iter.Seq2[T, struct{}]) iter.Seq[T] {
 			}
 		}
 	}
+}
+
+// SetIterator iterates over a set. Every positioning method reports whether
+// the iterator is now at an item.
+type SetIterator[I, K any] struct {
+	it Iterator[I, K, struct{}]
+}
+
+// Reset marks the iterator invalid, before the first item.
+func (i *SetIterator[I, K]) Reset() { i.it.Reset() }
+
+// First positions the iterator at the smallest item.
+func (i *SetIterator[I, K]) First() bool { return i.it.First() }
+
+// Last positions the iterator at the largest item.
+func (i *SetIterator[I, K]) Last() bool { return i.it.Last() }
+
+// Next positions the iterator at the following item.
+func (i *SetIterator[I, K]) Next() bool { return i.it.Next() }
+
+// Prev positions the iterator at the preceding item.
+func (i *SetIterator[I, K]) Prev() bool { return i.it.Prev() }
+
+// SeekGE positions the iterator at the first item >= item.
+func (i *SetIterator[I, K]) SeekGE(item I) bool { return i.it.SeekGE(item) }
+
+// SeekGT positions the iterator at the first item > item.
+func (i *SetIterator[I, K]) SeekGT(item I) bool { return i.it.SeekGT(item) }
+
+// SeekLE positions the iterator at the last item <= item.
+func (i *SetIterator[I, K]) SeekLE(item I) bool { return i.it.SeekLE(item) }
+
+// SeekLT positions the iterator at the last item < item.
+func (i *SetIterator[I, K]) SeekLT(item I) bool { return i.it.SeekLT(item) }
+
+// SeekExact positions the iterator at item and reports whether it is in
+// the set; if not, the iterator is at the first greater item.
+func (i *SetIterator[I, K]) SeekExact(item I) bool { return i.it.SeekExact(item) }
+
+// Valid reports whether the iterator is at an item.
+func (i *SetIterator[I, K]) Valid() bool { return i.it.Valid() }
+
+// Item returns the item at the iterator's position, which must be valid.
+func (i *SetIterator[I, K]) Item() I { return i.it.Key() }
+
+// Compare compares two items with the set's comparison function.
+func (i *SetIterator[I, K]) Compare(a, b I) int { return i.it.Compare(a, b) }
+
+// SetCursor is a SetIterator that can also mutate the set at its position;
+// see aug.Cursor for the rules.
+type SetCursor[I, K any] struct {
+	c Cursor[I, K, struct{}]
+}
+
+// Reset marks the cursor invalid, before the first item.
+func (c *SetCursor[I, K]) Reset() { c.c.Reset() }
+
+// First positions the cursor at the smallest item.
+func (c *SetCursor[I, K]) First() bool { return c.c.First() }
+
+// Last positions the cursor at the largest item.
+func (c *SetCursor[I, K]) Last() bool { return c.c.Last() }
+
+// Next positions the cursor at the following item.
+func (c *SetCursor[I, K]) Next() bool { return c.c.Next() }
+
+// Prev positions the cursor at the preceding item.
+func (c *SetCursor[I, K]) Prev() bool { return c.c.Prev() }
+
+// SeekGE positions the cursor at the first item >= item.
+func (c *SetCursor[I, K]) SeekGE(item I) bool { return c.c.SeekGE(item) }
+
+// SeekGT positions the cursor at the first item > item.
+func (c *SetCursor[I, K]) SeekGT(item I) bool { return c.c.SeekGT(item) }
+
+// SeekLE positions the cursor at the last item <= item.
+func (c *SetCursor[I, K]) SeekLE(item I) bool { return c.c.SeekLE(item) }
+
+// SeekLT positions the cursor at the last item < item.
+func (c *SetCursor[I, K]) SeekLT(item I) bool { return c.c.SeekLT(item) }
+
+// SeekExact positions the cursor at item and reports whether it is in the
+// set; if not, the cursor is at the first greater item.
+func (c *SetCursor[I, K]) SeekExact(item I) bool { return c.c.SeekExact(item) }
+
+// Valid reports whether the cursor is at an item.
+func (c *SetCursor[I, K]) Valid() bool { return c.c.Valid() }
+
+// Item returns the item at the cursor's position, which must be valid.
+func (c *SetCursor[I, K]) Item() I { return c.c.Key() }
+
+// Compare compares two items with the set's comparison function.
+func (c *SetCursor[I, K]) Compare(a, b I) int { return c.c.Compare(a, b) }
+
+// Delete removes the current item and returns it, leaving the cursor on
+// the following item or past the end; see aug.Cursor.Delete.
+func (c *SetCursor[I, K]) Delete() I {
+	item, _ := c.c.Delete()
+	return item
+}
+
+// Rekey replaces the current item with item, which may sort elsewhere,
+// and returns any other item equal to it that was displaced. Afterwards
+// the cursor is on item.
+func (c *SetCursor[I, K]) Rekey(item I) (displaced I, ok bool) {
+	displaced, _, ok = c.c.Rekey(item)
+	return displaced, ok
+}
+
+// Upsert inserts item, or replaces the equal item already present and
+// returns it, using the cursor's position as a hint. Afterwards the cursor
+// is on item.
+func (c *SetCursor[I, K]) Upsert(item I) (replaced I, ok bool) {
+	replaced, _, ok = c.c.Upsert(item, struct{}{})
+	return replaced, ok
 }

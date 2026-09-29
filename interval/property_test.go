@@ -152,7 +152,7 @@ func testOverlapProperty(t *testing.T, degree int) {
 						break
 					}
 				}
-				removed := m.Delete(s)
+				_, removed := m.Delete(s)
 				_, had := ref[s]
 				if removed != had {
 					t.Fatalf("step %d: Delete(%v) = %v, want %v", step, s, removed, had)
@@ -190,29 +190,33 @@ func TestOverlapIteratorIsIndependent(t *testing.T) {
 		m.Upsert(s)
 	}
 	ov := m.Overlaps(interval.HalfOpen(10, 16))
-	if !ov.Valid() || ov.Key() != (span{10, 11}) {
-		t.Fatalf("Overlaps at %v", ov.Key())
+	if !ov.Valid() || ov.Item() != (span{10, 11}) {
+		t.Fatalf("Overlaps at %v", ov.Item())
 	}
 	it := m.Iterator()
 	it.SeekGE(span{5, 6})
 	it.Prev()
 	it.Next()
-	if !ov.Next() || ov.Key() != (span{15, 16}) {
-		t.Fatalf("Next after plain iteration at valid=%v %v", ov.Valid(), ov.Key())
+	if !ov.Next() || ov.Item() != (span{15, 16}) {
+		t.Fatalf("Next after plain iteration at valid=%v %v", ov.Valid(), ov.Item())
 	}
 	if ov.Next() || ov.Valid() {
-		t.Fatalf("Next past the last overlap is valid at %v", ov.Key())
+		t.Fatalf("Next past the last overlap is valid at %v", ov.Item())
 	}
-	if !it.Valid() || it.Key() != (span{5, 6}) {
-		t.Fatalf("plain iterator disturbed: valid=%v %v", it.Valid(), it.Key())
+	if !it.Valid() || it.Item() != (span{5, 6}) {
+		t.Fatalf("plain iterator disturbed: valid=%v %v", it.Valid(), it.Item())
 	}
 	for _, q := range []interval.Span[int]{interval.HalfOpen(5, 5), interval.HalfOpen(6, 5)} {
 		if e := m.Overlaps(q); e.Valid() {
-			t.Fatalf("empty span %v overlaps %v", q, e.Key())
+			t.Fatalf("empty span %v overlaps %v", q, e.Item())
 		}
 	}
-	if e := m.Overlaps(interval.Point(5)); !e.Valid() || e.Key() != (span{5, 6}) {
-		t.Fatalf("Point(5) = valid %v %v", e.Valid(), e.Key())
+	if e := m.Overlaps(interval.Point(5)); !e.Valid() || e.Item() != (span{5, 6}) {
+		t.Fatalf("Point(5) = valid %v %v", e.Valid(), e.Item())
+	}
+	// Seek reuses the iterator for another query.
+	if !ov.Seek(interval.HalfOpen(0, 6)) || ov.Item() != (span{0, 1}) || !ov.Next() || ov.Item() != (span{5, 6}) || ov.Next() {
+		t.Fatal("Seek did not restart the scan")
 	}
 }
 
@@ -320,5 +324,40 @@ func TestTieBreakCannotReorderStarts(t *testing.T) {
 	}
 	if want := []span{{0, 8}, {5, 20}}; !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// TestDefaultEqualityNormalizesPoints checks that the default tie-break
+// treats every representation of a point at the same key as the same item.
+func TestDefaultEqualityNormalizesPoints(t *testing.T) {
+	m := interval.NewSet(interval.BoundsOf[span](cmp.Compare[int]))
+	m.Upsert(span{5, 2}) // reversed: a point at 5
+	if _, replaced := m.Upsert(span{5, 5}); !replaced {
+		t.Fatal("{5,5} did not replace the reversed point {5,2}")
+	}
+	if m.Len() != 1 {
+		t.Fatalf("len %d", m.Len())
+	}
+	if got, ok := m.Get(span{5, 0}); !ok || got != (span{5, 5}) {
+		t.Fatalf("Get = %v %v", got, ok)
+	}
+	m.Upsert(span{5, 9}) // a range at the same start is a different item
+	if m.Len() != 2 {
+		t.Fatalf("len %d after adding a range", m.Len())
+	}
+	// The set API: iterators and cursors expose items only.
+	it := m.Iterator()
+	if !it.First() || it.Item() != (span{5, 5}) || !it.Next() || it.Item() != (span{5, 9}) {
+		t.Fatal("set iterator order")
+	}
+	c := m.Cursor()
+	if !c.SeekExact(span{5, 5}) {
+		t.Fatal("SeekExact")
+	}
+	if removed := c.Delete(); removed != (span{5, 5}) || !c.Valid() || c.Item() != (span{5, 9}) {
+		t.Fatalf("cursor Delete = %v, now at valid=%v %v", removed, c.Valid(), c.Item())
+	}
+	if removed, ok := m.Delete(span{5, 9}); !ok || removed != (span{5, 9}) {
+		t.Fatalf("Delete = %v %v", removed, ok)
 	}
 }

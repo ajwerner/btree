@@ -123,20 +123,30 @@ type overlapScan[I, K, V any] struct {
 }
 
 func newOverlapIterator[I, K, V any](m *aug.Map[I, V, subtreeBound[K]], span Span[K]) OverlapIterator[I, K, V] {
-	i := OverlapIterator[I, K, V]{it: m.Iterator(), o: overlapScan[I, K, V]{span: span}}
+	i := OverlapIterator[I, K, V]{it: m.Iterator()}
+	i.Seek(span)
+	return i
+}
+
+// Seek restarts the iterator at the first entry overlapping span and
+// reports whether there is one. Reusing an iterator this way avoids the
+// cost of constructing one per query.
+func (i *OverlapIterator[I, K, V]) Seek(span Span[K]) bool {
+	i.it.Reset()
+	i.o = overlapScan[I, K, V]{span: span}
 	ll := aug.LowLevel(&i.it)
 	cfg := i.cfg()
 	if span.empty(cfg.cmp) {
-		return i
+		return false
 	}
 	ll.IncrementPos()
 	if !i.it.Valid() {
-		return i
+		return false
 	}
 	i.constrainMinSearchBounds()
 	i.constrainMaxSearchBounds()
 	i.findNextOverlap()
-	return i
+	return i.it.Valid()
 }
 
 func (i *OverlapIterator[I, K, V]) cfg() *updater[I, K, V] {

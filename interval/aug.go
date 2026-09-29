@@ -33,7 +33,6 @@ func (u *updater[I, K, V]) Update(
 	md aug.UpdateInfo[I, V, subtreeBound[K]],
 ) (updated bool) {
 	a := n.Aug()
-	defer func() { n.SetAug(a) }() // a is modified below; store it on the way out
 	switch md.Action {
 	case aug.Insertion:
 		up := u.upperBound(md.RelevantKey)
@@ -44,6 +43,7 @@ func (u *updater[I, K, V]) Update(
 		}
 		if !a.set || a.compare(u.cmp, up) < 0 {
 			a.keyBound, a.set = up, true
+			n.SetAug(a)
 			return true
 		}
 		return false
@@ -56,6 +56,7 @@ func (u *updater[I, K, V]) Update(
 		}
 		if a.set && a.compare(u.cmp, up) == 0 {
 			a.keyBound, a.set = u.findUpperBound(n)
+			n.SetAug(a)
 			return !a.set || a.compare(u.cmp, up) != 0
 		}
 		return false
@@ -68,6 +69,7 @@ func (u *updater[I, K, V]) Update(
 	case aug.Default, aug.Replacement:
 		prev, prevSet := a.keyBound, a.set
 		a.keyBound, a.set = u.findUpperBound(n)
+		n.SetAug(a)
 		return prevSet != a.set || (a.set && a.compare(u.cmp, prev) != 0)
 	default:
 		panic("interval: unknown action")
@@ -84,11 +86,10 @@ type keyBound[K any] struct {
 // its start is a point, so that leaf matching and subtree pruning agree.
 func (up *updater[I, K, V]) upperBound(interval I) keyBound[K] {
 	k := up.key(interval)
-	if !up.hasEnd(interval) {
-		return keyBound[K]{k: k, inclusive: true}
-	}
-	if end := up.end(interval); up.cmp(end, k) > 0 {
-		return keyBound[K]{k: end}
+	if up.hasEnd(interval) {
+		if end := up.end(interval); up.cmp(end, k) > 0 {
+			return keyBound[K]{k: end}
+		}
 	}
 	return keyBound[K]{k: k, inclusive: true}
 }

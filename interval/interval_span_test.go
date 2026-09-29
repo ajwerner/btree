@@ -729,12 +729,13 @@ func BenchmarkBTreeIterFirstOverlap(b *testing.B) {
 		}
 
 		rng := newRNG(b)
+		it := tr.Overlaps(query(spans[0]))
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			j := rng.IntN(len(spans))
 			s := spans[j]
-			it := tr.Overlaps(query(s))
+			it.Seek(query(s))
 			if testing.Verbose() {
 				if !it.Valid() {
 					b.Fatal("expected to find key")
@@ -818,9 +819,10 @@ func BenchmarkBTreeIterOverlapScan(b *testing.B) {
 		tr.Upsert(newLatch(spanWithEnd(i, i+size+1)), struct{}{})
 	}
 
+	ov := tr.Overlaps(query(randomSpan(rng, count)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		for ov := tr.Overlaps(query(randomSpan(rng, count))); ov.Valid(); ov.Next() {
+		for ok := ov.Seek(query(randomSpan(rng, count))); ok; ok = ov.Next() {
 		}
 	}
 }

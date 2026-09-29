@@ -81,6 +81,9 @@ func (c *config[K, V, A]) getNode() *Node[K, V, A] {
 		n.keys = make([]K, 0, c.maxEntries)
 		n.values = make([]V, 0, c.maxEntries)
 	}
+	if c.monoid != nil {
+		n.aug = c.monoid.Identity()
+	}
 	n.ref = 1
 	return n
 }
@@ -381,6 +384,14 @@ func (n *Node[K, V, A]) update(cfg *Config[K, V, A]) bool {
 	return cfg.Updater.Update(n, UpdateInfo[K, V, A]{})
 }
 
+// restructured tells a Restructurer that the shape below n changed.
+func (n *Node[K, V, A]) restructured(c *config[K, V, A]) bool {
+	if c.restr == nil {
+		return false
+	}
+	return c.restr.Restructured(n)
+}
+
 func (n *Node[K, V, A]) updateOn(cfg *Config[K, V, A], action Action, k K, v V, affected *Node[K, V, A]) bool {
 	if cfg.Updater == nil {
 		return false
@@ -431,7 +442,7 @@ func (n *Node[K, V, A]) insert(c *config[K, V, A], item K, value V) (replacedK K
 	if len(n.children[i].keys) >= c.maxEntries {
 		splitK, splitV, splitNode := mut(c, &n.children[i]).split(c, c.maxEntries/2)
 		n.insertAt(i, splitK, splitV, splitNode)
-		structural = n.update(&c.Config)
+		structural = n.restructured(c)
 		if cmp := c.cmp(item, n.keys[i]); cmp < 0 {
 			// no change, we want first split node
 		} else if cmp > 0 {
@@ -618,7 +629,7 @@ func (n *Node[K, V, A]) rebalanceOrMerge(c *config[K, V, A], i int) bool {
 			mergeChild.decRef(c, true /* recursive */)
 		}
 	}
-	return n.update(&c.Config)
+	return n.restructured(c)
 }
 
 // remove removes an item from the subtree rooted at this node. Returns the item
@@ -655,7 +666,7 @@ func (n *Node[K, V, A]) remove(
 			changed = n.updateOn(&c.Config, Removal, outK, outV, nil)
 		} else {
 			// Nothing was removed but the subtree was restructured.
-			changed = n.update(&c.Config)
+			changed = n.restructured(c)
 		}
 	}
 	return outK, outV, found, changed

@@ -212,3 +212,49 @@ func Example_customAugmentation() {
 	// pool 2: 3 hosts, 150 load
 	// cumulative load reaches 200 at {1 4}
 }
+
+// product is a CommutativeMonoid whose identity is 1, not the zero value.
+type product struct{}
+
+func (product) Identity() int          { return 1 }
+func (product) Of(_ int, v int) int    { return v }
+func (product) Combine(a, b int) int   { return a * b }
+func (product) Uncombine(a, b int) int { return a / b }
+
+// TestNonZeroIdentity checks that fresh and recycled nodes start from the
+// monoid's identity rather than the zero value.
+func TestNonZeroIdentity(t *testing.T) {
+	m := aug.NewMonoid[int, int, int](cmp.Compare[int], product{}, aug.WithDegree(2))
+	if m.Total() != 1 {
+		t.Fatalf("empty Total %d, want the identity", m.Total())
+	}
+	m.Upsert(1, 7)
+	if m.Total() != 7 || m.Aggregate(0, 10) != 7 {
+		t.Fatalf("Total %d, Aggregate %d after inserting 7", m.Total(), m.Aggregate(0, 10))
+	}
+	want := 7
+	for i := 2; i <= 12; i++ {
+		m.Upsert(i, 2)
+		want *= 2
+	}
+	if m.Total() != want {
+		t.Fatalf("Total %d, want %d after splits", m.Total(), want)
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+	// Clear recycles nodes into the free list; they must start from the
+	// identity again.
+	m.Clear()
+	m.Upsert(1, 5)
+	m.Upsert(2, 3)
+	if m.Total() != 15 {
+		t.Fatalf("Total %d after Clear and reinsert, want 15", m.Total())
+	}
+	if p, _ := m.Prefix(2); p != 5 {
+		t.Fatalf("Prefix(2) = %d, want 5", p)
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+}

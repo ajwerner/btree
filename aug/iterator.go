@@ -172,7 +172,7 @@ func (i *Iterator[K, V, A]) Next() bool {
 			i.pos++
 		}
 		i.settle()
-		return i.Valid()
+		return i.pos < i.node.Count()
 	}
 	if i.pos >= i.node.Count() {
 		// Past the end; stay there.
@@ -215,7 +215,7 @@ func (i *Iterator[K, V, A]) Prev() bool {
 			ll.Ascend()
 			i.pos--
 		}
-		return i.Valid()
+		return i.pos >= 0
 	}
 	if i.pos < 0 {
 		// Before the beginning; stay there.
