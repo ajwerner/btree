@@ -37,8 +37,8 @@ type Node[K, V, A any] struct {
 	children []*Node[K, V, A] // empty for leaves
 }
 
-// GetA returns a pointer to the node's augmentation.
-func (n *Node[K, V, A]) GetA() *A {
+// Aug returns a pointer to the node's augmentation.
+func (n *Node[K, V, A]) Aug() *A {
 	return &n.aug
 }
 
@@ -52,19 +52,19 @@ func (n *Node[K, V, A]) Count() int16 {
 	return int16(len(n.entries))
 }
 
-// GetKey returns the key at position i, which must be in [0, Count()).
-func (n *Node[K, V, A]) GetKey(i int16) K {
+// Key returns the key at position i, which must be in [0, Count()).
+func (n *Node[K, V, A]) Key(i int16) K {
 	return n.entries[i].k
 }
 
-// GetValue returns the value at position i, which must be in [0, Count()).
-func (n *Node[K, V, A]) GetValue(i int16) V {
+// Value returns the value at position i, which must be in [0, Count()).
+func (n *Node[K, V, A]) Value(i int16) V {
 	return n.entries[i].v
 }
 
-// GetChild returns the augmentation of the child at position i, which must
+// ChildAug returns the augmentation of the child at position i, which must
 // be in [0, Count()] for a non-leaf node. It returns nil for a leaf.
-func (n *Node[K, V, A]) GetChild(i int16) *A {
+func (n *Node[K, V, A]) ChildAug(i int16) *A {
 	if int(i) < len(n.children) {
 		return &n.children[i].aug
 	}

@@ -69,7 +69,7 @@ func (t *Map[K, V]) Nth(n int) (k K, v V, ok bool) {
 	if !it.Valid() {
 		return k, v, false
 	}
-	return it.Cur(), it.Value(), true
+	return it.Key(), it.Value(), true
 }
 
 // Set is an ordered set with items of type T which additionally offers rank
@@ -213,7 +213,7 @@ func seekNth[K, V any](ll *aug.LowLevelIterator[K, V, int], nth int) {
 	it := (*aug.Iterator[K, V, int])(ll)
 	it.Reset()
 	n := ll.Node()
-	if n == nil || nth < 0 || nth >= *n.GetA() {
+	if n == nil || nth < 0 || nth >= *n.Aug() {
 		if n != nil && nth >= 0 {
 			ll.SetPos(n.Count())
 		}
@@ -227,7 +227,7 @@ func seekNth[K, V any](ll *aug.LowLevelIterator[K, V, int], nth int) {
 		}
 		pos := int16(0)
 		for ; ; pos++ {
-			c := *n.GetChild(pos)
+			c := *n.ChildAug(pos)
 			if nth < c {
 				break
 			}

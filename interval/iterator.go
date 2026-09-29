@@ -141,7 +141,7 @@ func (i *Iterator[I, K, V]) constrainMinSearchBounds() {
 	k := cfg.key(i.o.bounds)
 	n := ll.Node()
 	j := sort.Search(int(n.Count()), func(j int) bool {
-		return cmp(k, cfg.key(n.GetKey(int16(j)))) <= 0
+		return cmp(k, cfg.key(n.Key(int16(j)))) <= 0
 	})
 	i.o.constrMinN = n
 	i.o.constrMinPos = int16(j)
@@ -154,7 +154,7 @@ func (i *Iterator[I, K, V]) constrainMaxSearchBounds() {
 	up := cfg.upperBound(i.o.bounds)
 	n := ll.Node()
 	j := sort.Search(int(n.Count()), func(j int) bool {
-		return !up.contains(cmp, cfg.key(n.GetKey(int16(j))))
+		return !up.contains(cmp, cfg.key(n.Key(int16(j))))
 	})
 	i.o.constrMaxN = n
 	i.o.constrMaxPos = int16(j)
@@ -170,7 +170,7 @@ func (i *Iterator[I, K, V]) findNextOverlap() {
 			ll.Ascend()
 		} else if !ll.Node().IsLeaf() {
 			// Iterate down tree.
-			if i.o.constrMinReached || ll.Child().contains(cmp, cfg.key(i.o.bounds)) {
+			if i.o.constrMinReached || ll.ChildAug().contains(cmp, cfg.key(i.o.bounds)) {
 				par := ll.Node()
 				pos := ll.Pos()
 				ll.Descend()
@@ -206,7 +206,7 @@ func (i *Iterator[I, K, V]) findNextOverlap() {
 				// span's start key.
 				return
 			}
-			if cfg.upperBound(i.Cur()).contains(cmp, cfg.key(i.o.bounds)) {
+			if cfg.upperBound(i.Key()).contains(cmp, cfg.key(i.o.bounds)) {
 				return
 			}
 		}

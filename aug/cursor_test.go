@@ -67,8 +67,8 @@ func testCursor(t *testing.T, degree int) {
 		it := m.Iterator()
 		i := 0
 		for it.First(); it.Valid(); it.Next() {
-			if it.Cur() != keys[i] || it.Value() != ref[keys[i]] {
-				t.Fatalf("position %d: (%d, %d), want (%d, %d)", i, it.Cur(), it.Value(), keys[i], ref[keys[i]])
+			if it.Key() != keys[i] || it.Value() != ref[keys[i]] {
+				t.Fatalf("position %d: (%d, %d), want (%d, %d)", i, it.Key(), it.Value(), keys[i], ref[keys[i]])
 			}
 			i++
 		}
@@ -98,12 +98,12 @@ func testCursor(t *testing.T, degree int) {
 		t.Helper()
 		if want == -1 {
 			if c.Valid() {
-				t.Fatalf("%s: cursor valid at %d, want invalid", what, c.Cur())
+				t.Fatalf("%s: cursor valid at %d, want invalid", what, c.Key())
 			}
 			return
 		}
-		if !c.Valid() || c.Cur() != want {
-			t.Fatalf("%s: cursor at valid=%v %d, want %d", what, c.Valid(), c.Cur(), want)
+		if !c.Valid() || c.Key() != want {
+			t.Fatalf("%s: cursor at valid=%v %d, want %d", what, c.Valid(), c.Key(), want)
 		}
 	}
 	successor := func(keys []int, k int) int {
@@ -136,12 +136,12 @@ func testCursor(t *testing.T, degree int) {
 			}
 			v := rng.IntN(1000)
 			c.SetValue(v)
-			ref[c.Cur()] = v
+			ref[c.Key()] = v
 		case op < 55:
 			if !c.Valid() {
 				continue
 			}
-			k := c.Cur()
+			k := c.Key()
 			gotK, gotV := c.Delete()
 			if gotK != k || gotV != ref[k] {
 				t.Fatalf("step %d: Delete returned (%d, %d), want (%d, %d)", step, gotK, gotV, k, ref[k])
@@ -152,7 +152,7 @@ func testCursor(t *testing.T, degree int) {
 			if !c.Valid() {
 				continue
 			}
-			old := c.Cur()
+			old := c.Key()
 			v := ref[old]
 			var k int
 			if rng.IntN(2) == 0 {
@@ -176,7 +176,7 @@ func testCursor(t *testing.T, degree int) {
 			expectKey(k, "Upsert")
 		case op < 95:
 			if c.Valid() {
-				k := c.Cur()
+				k := c.Key()
 				c.Next()
 				expectKey(successor(keys, k+1), "Next")
 			} else {
@@ -187,7 +187,7 @@ func testCursor(t *testing.T, degree int) {
 			}
 		default:
 			if c.Valid() {
-				k := c.Cur()
+				k := c.Key()
 				c.Prev()
 				i, _ := slices.BinarySearch(keys, k)
 				want := -1
@@ -231,8 +231,8 @@ func TestCursorEmptiesAndRefills(t *testing.T) {
 	}
 	for i := range 100 {
 		c.Upsert(i, i)
-		if !c.Valid() || c.Cur() != i {
-			t.Fatalf("after Upsert(%d) cursor at valid=%v %d", i, c.Valid(), c.Cur())
+		if !c.Valid() || c.Key() != i {
+			t.Fatalf("after Upsert(%d) cursor at valid=%v %d", i, c.Valid(), c.Key())
 		}
 	}
 	if err := m.Verify(); err != nil {
@@ -331,7 +331,7 @@ func FuzzCursor(f *testing.F) {
 			case 1:
 				if c.Valid() {
 					c.SetValue(k)
-					ref[c.Cur()] = k
+					ref[c.Key()] = k
 				}
 			case 2:
 				if c.Valid() {
@@ -340,20 +340,20 @@ func FuzzCursor(f *testing.F) {
 				}
 			case 3:
 				if c.Valid() {
-					old := c.Cur()
+					old := c.Key()
 					v := ref[old]
 					c.Rekey(k)
 					delete(ref, old)
 					ref[k] = v
-					if !c.Valid() || c.Cur() != k {
-						t.Fatalf("after Rekey(%d) cursor at valid=%v %d", k, c.Valid(), c.Cur())
+					if !c.Valid() || c.Key() != k {
+						t.Fatalf("after Rekey(%d) cursor at valid=%v %d", k, c.Valid(), c.Key())
 					}
 				}
 			case 4:
 				c.Upsert(k, i)
 				ref[k] = i
-				if !c.Valid() || c.Cur() != k {
-					t.Fatalf("after Upsert(%d) cursor at valid=%v %d", k, c.Valid(), c.Cur())
+				if !c.Valid() || c.Key() != k {
+					t.Fatalf("after Upsert(%d) cursor at valid=%v %d", k, c.Valid(), c.Key())
 				}
 			case 5:
 				c.Next()

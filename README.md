@@ -15,7 +15,7 @@ m.Upsert("foo", 1)
 snapshot := m.Clone() // O(1); writes to either side copy on write
 it := snapshot.Iterator()
 for it.First(); it.Valid(); it.Next() {
-	fmt.Println(it.Cur(), it.Value())
+	fmt.Println(it.Key(), it.Value())
 }
 for k, v := range snapshot.Range("a", "n") { // also All, Backward, From
 	fmt.Println(k, v)

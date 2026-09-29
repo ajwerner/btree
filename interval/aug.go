@@ -23,7 +23,7 @@ type subtreeBound[K any] struct {
 
 type updater[I, K, V any] struct {
 	key, end func(I) K
-	cmp      Cmp[K]
+	cmp      func(K, K) int
 	hasEnd   func(I) bool
 }
 
@@ -31,7 +31,7 @@ func (u *updater[I, K, V]) Update(
 	n *aug.Node[I, V, subtreeBound[K]],
 	md aug.UpdateInfo[I, V, subtreeBound[K]],
 ) (updated bool) {
-	a := n.GetA()
+	a := n.Aug()
 	switch md.Action {
 	case aug.Insertion:
 		up := u.upperBound(md.RelevantKey)
@@ -84,7 +84,7 @@ func (up *updater[I, K, V]) upperBound(interval I) keyBound[K] {
 	return keyBound[K]{k: up.end(interval)}
 }
 
-func isZero[K any](cmp Cmp[K], k K) bool {
+func isZero[K any](cmp func(K, K) int, k K) bool {
 	var z K
 	return cmp(k, z) == 0
 }
@@ -93,7 +93,7 @@ func (up *updater[I, K, V]) findUpperBound(n *aug.Node[I, V, subtreeBound[K]]) k
 	var max keyBound[K]
 	var setMax bool
 	for i, cnt := int16(0), n.Count(); i < cnt; i++ {
-		ub := up.upperBound(n.GetKey(i))
+		ub := up.upperBound(n.Key(i))
 		if !setMax || max.compare(up.cmp, ub) < 0 {
 			setMax = true
 			max = ub
@@ -101,7 +101,7 @@ func (up *updater[I, K, V]) findUpperBound(n *aug.Node[I, V, subtreeBound[K]]) k
 	}
 	if !n.IsLeaf() {
 		for i, cnt := int16(0), n.Count(); i <= cnt; i++ {
-			ub := n.GetChild(i).keyBound
+			ub := n.ChildAug(i).keyBound
 			if max.compare(up.cmp, ub) < 0 {
 				max = ub
 			}
@@ -110,7 +110,7 @@ func (up *updater[I, K, V]) findUpperBound(n *aug.Node[I, V, subtreeBound[K]]) k
 	return max
 }
 
-func (b keyBound[K]) compare(cmp Cmp[K], o keyBound[K]) int {
+func (b keyBound[K]) compare(cmp func(K, K) int, o keyBound[K]) int {
 	c := cmp(b.k, o.k)
 	if c != 0 {
 		return c
@@ -124,7 +124,7 @@ func (b keyBound[K]) compare(cmp Cmp[K], o keyBound[K]) int {
 	return -1
 }
 
-func (b keyBound[K]) contains(cmp Cmp[K], o K) bool {
+func (b keyBound[K]) contains(cmp func(K, K) int, o K) bool {
 	c := cmp(o, b.k)
 	if c == 0 {
 		return b.inclusive

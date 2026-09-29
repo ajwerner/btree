@@ -142,7 +142,7 @@ func (c *Cursor[K, V, A]) Delete() (K, V) {
 		}
 		return k, v
 	}
-	k := c.Cur()
+	k := c.Key()
 	k, v, _ := t.Delete(k)
 	c.SeekGE(k)
 	return k, v

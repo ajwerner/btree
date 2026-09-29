@@ -84,7 +84,7 @@ type monoidUpdater[K, V, A any] struct {
 func (u *monoidUpdater[K, V, A]) monoid() Monoid[K, V, A] { return u.m }
 
 func (u *monoidUpdater[K, V, A]) Update(n *Node[K, V, A], md UpdateInfo[K, V, A]) bool {
-	a := n.GetA()
+	a := n.Aug()
 	prev := *a
 	switch md.Action {
 	case Insertion:

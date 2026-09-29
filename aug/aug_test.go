@@ -183,8 +183,8 @@ func TestConcurrentReadersOnSnapshot(t *testing.T) {
 			it := snap.Iterator()
 			n := 0
 			for it.First(); it.Valid(); it.Next() {
-				if it.Cur() != n || it.Value() != n {
-					t.Errorf("reader %d: position %d holds (%d, %d)", r, n, it.Cur(), it.Value())
+				if it.Key() != n || it.Value() != n {
+					t.Errorf("reader %d: position %d holds (%d, %d)", r, n, it.Key(), it.Value())
 					return
 				}
 				n++

@@ -127,15 +127,15 @@ func testMonoidAggregates(t *testing.T, degree int) {
 			}
 			if wantIdx == -1 {
 				if it.Valid() {
-					t.Fatalf("SeekWhere(sum >= %d) valid at %d, want past end", threshold, it.Cur())
+					t.Fatalf("SeekWhere(sum >= %d) valid at %d, want past end", threshold, it.Key())
 				}
 				if prefix != statsOf(keys, ref, -1<<31, 1<<31) {
 					t.Fatalf("SeekWhere past end returned prefix %v", prefix)
 				}
 				continue
 			}
-			if !it.Valid() || it.Cur() != keys[wantIdx] {
-				t.Fatalf("SeekWhere(sum >= %d) = %v %d, want %d", threshold, it.Valid(), it.Cur(), keys[wantIdx])
+			if !it.Valid() || it.Key() != keys[wantIdx] {
+				t.Fatalf("SeekWhere(sum >= %d) = %v %d, want %d", threshold, it.Valid(), it.Key(), keys[wantIdx])
 			}
 			if want := statsOf(keys[:wantIdx], ref, -1<<31, 1<<31); prefix != want {
 				t.Fatalf("SeekWhere(sum >= %d) prefix %v, want %v", threshold, prefix, want)
@@ -215,7 +215,7 @@ func Example_customAugmentation() {
 
 	it := m.Iterator()
 	it.SeekWhere(func(prefix, c load) bool { return prefix.B+c.B >= 200 })
-	fmt.Println("cumulative load reaches 200 at", it.Cur())
+	fmt.Println("cumulative load reaches 200 at", it.Key())
 	// Output:
 	// pool 2: 3 hosts, 150 load
 	// cumulative load reaches 200 at {1 4}

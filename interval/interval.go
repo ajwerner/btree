@@ -12,9 +12,16 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
+// Package interval provides copy-on-write ordered maps and sets of
+// intervals whose iterators find every interval overlapping a query in
+// O(log n + k).
 package interval
 
-import "github.com/ajwerner/btree/aug"
+import (
+	"iter"
+
+	"github.com/ajwerner/btree/aug"
+)
 
 // Map is an ordered map from I to V where I is an interval. Its iterator
 // provides efficient overlap queries.
@@ -22,31 +29,73 @@ type Map[I, K, V any] struct {
 	*aug.Map[I, V, subtreeBound[K]]
 }
 
-// New constructs a Map with the provided comparison functions for
-// intervals and for their bounds. key and endKey extract the bounds of an
-// interval; hasEnd reports whether an interval has an end key, and may be
-// nil, in which case an interval whose end key is the zero K is treated as
-// a point. See aug.WithDegree and aug.WithFreeList for the options.
-func New[I, K, V any](
-	cmpK Cmp[K],
-	cmpI Cmp[I],
-	key, endKey func(I) K,
-	hasEnd func(I) bool,
-	opts ...aug.Option,
-) *Map[I, K, V] {
-	if hasEnd == nil {
-		hasEnd = func(i I) bool {
-			return !isZero(cmpK, endKey(i))
+// Bounds describes how to read intervals of type I whose bounds have type
+// K. Compare, Key and End are required.
+type Bounds[I, K any] struct {
+
+	// Compare orders bound keys.
+	Compare func(K, K) int
+
+	// Key returns the inclusive start of an interval.
+	Key func(I) K
+
+	// End returns the exclusive end of an interval. An interval without an
+	// end (see HasEnd) is a point containing only its Key.
+	End func(I) K
+
+	// HasEnd reports whether an interval has an end. It is optional: by
+	// default an interval whose End is the zero K has none.
+	HasEnd func(I) bool
+
+	// CompareIntervals orders intervals and so defines which intervals a
+	// Map treats as the same key. It is optional: by default intervals are
+	// ordered by Key, then points before ranges, then by End.
+	CompareIntervals func(I, I) int
+}
+
+func (b Bounds[I, K]) withDefaults() Bounds[I, K] {
+	if b.Compare == nil || b.Key == nil || b.End == nil {
+		panic("interval: Bounds.Compare, Key and End are required")
+	}
+	if b.HasEnd == nil {
+		b.HasEnd = func(i I) bool {
+			var zero K
+			return b.Compare(b.End(i), zero) != 0
 		}
 	}
+	if b.CompareIntervals == nil {
+		b.CompareIntervals = func(x, y I) int {
+			if c := b.Compare(b.Key(x), b.Key(y)); c != 0 {
+				return c
+			}
+			xEnd, yEnd := b.HasEnd(x), b.HasEnd(y)
+			switch {
+			case xEnd && yEnd:
+				return b.Compare(b.End(x), b.End(y))
+			case xEnd:
+				return 1
+			case yEnd:
+				return -1
+			default:
+				return 0
+			}
+		}
+	}
+	return b
+}
+
+// New constructs a Map over intervals described by b. See aug.WithDegree
+// and aug.WithFreeList for the options.
+func New[I, K, V any](b Bounds[I, K], opts ...aug.Option) *Map[I, K, V] {
+	b = b.withDefaults()
 	return &Map[I, K, V]{
 		Map: aug.New[I, V, subtreeBound[K]](
-			cmpI,
+			b.CompareIntervals,
 			&updater[I, K, V]{
-				cmp:    cmpK,
-				key:    key,
-				end:    endKey,
-				hasEnd: hasEnd,
+				cmp:    b.Compare,
+				key:    b.Key,
+				end:    b.End,
+				hasEnd: b.HasEnd,
 			},
 			opts...,
 		),
@@ -58,9 +107,6 @@ func (m *Map[I, K, V]) Clone() *Map[I, K, V] {
 	return &Map[I, K, V]{Map: m.Map.Clone()}
 }
 
-// Cmp is a comparison function for type T.
-type Cmp[T any] func(T, T) int
-
 // Iterator constructs a new Iterator for the Map.
 func (t *Map[I, K, V]) Iterator() Iterator[I, K, V] {
 	return Iterator[I, K, V]{
@@ -68,47 +114,66 @@ func (t *Map[I, K, V]) Iterator() Iterator[I, K, V] {
 	}
 }
 
-// Set is an ordered set of intervals of type I with bounds of type T whose
-// iterator provides efficient overlap queries.
-type Set[I, T any] Map[I, T, struct{}]
+// Overlapping returns an iterator over the entries whose intervals overlap
+// bounds, in order of their start keys.
+func (t *Map[I, K, V]) Overlapping(bounds I) iter.Seq2[I, V] {
+	return func(yield func(I, V) bool) {
+		it := t.Iterator()
+		for it.FirstOverlap(bounds); it.Valid(); it.NextOverlap() {
+			if !yield(it.Key(), it.Value()) {
+				return
+			}
+		}
+	}
+}
 
-// NewSet constructs a Set with the provided comparison functions. See New.
-func NewSet[I, T any](
-	cmpT Cmp[T],
-	cmpI Cmp[I],
-	key, endKey func(I) T,
-	hasEnd func(I) bool,
-	opts ...aug.Option,
-) *Set[I, T] {
-	return (*Set[I, T])(New[I, T, struct{}](cmpT, cmpI, key, endKey, hasEnd, opts...))
+// Set is an ordered set of intervals of type I with bounds of type K whose
+// iterator provides efficient overlap queries.
+type Set[I, K any] Map[I, K, struct{}]
+
+// NewSet constructs a Set over intervals described by b. See New.
+func NewSet[I, K any](b Bounds[I, K], opts ...aug.Option) *Set[I, K] {
+	return (*Set[I, K])(New[I, K, struct{}](b, opts...))
 }
 
 // Clone clones the Set, lazily. It does so in constant time.
-func (t *Set[I, T]) Clone() *Set[I, T] {
-	return (*Set[I, T])((*Map[I, T, struct{}])(t).Clone())
+func (t *Set[I, K]) Clone() *Set[I, K] {
+	return (*Set[I, K])((*Map[I, K, struct{}])(t).Clone())
 }
 
 // Upsert inserts or updates the provided item. It returns
 // the overwritten item if a previous value existed for the key.
-func (t *Set[I, T]) Upsert(item I) (replaced I, overwrote bool) {
+func (t *Set[I, K]) Upsert(item I) (replaced I, overwrote bool) {
 	replaced, _, overwrote = t.Map.Upsert(item, struct{}{})
 	return replaced, overwrote
 }
 
 // Delete removes the provided item. It returns true if the item existed in
 // the set.
-func (t *Set[I, T]) Delete(item I) (removed bool) {
+func (t *Set[I, K]) Delete(item I) (removed bool) {
 	_, _, removed = t.Map.Delete(item)
 	return removed
 }
 
 // Contains returns true if the item exists in the set.
-func (t *Set[I, T]) Contains(item I) bool {
+func (t *Set[I, K]) Contains(item I) bool {
 	_, ok := t.Map.Get(item)
 	return ok
 }
 
 // Iterator constructs an iterator for this set.
-func (t *Set[I, T]) Iterator() Iterator[I, T, struct{}] {
-	return (*Map[I, T, struct{}])(t).Iterator()
+func (t *Set[I, K]) Iterator() Iterator[I, K, struct{}] {
+	return (*Map[I, K, struct{}])(t).Iterator()
+}
+
+// Overlapping returns an iterator over the items that overlap bounds, in
+// order of their start keys.
+func (t *Set[I, K]) Overlapping(bounds I) iter.Seq[I] {
+	return func(yield func(I) bool) {
+		for i := range (*Map[I, K, struct{}])(t).Overlapping(bounds) {
+			if !yield(i) {
+				return
+			}
+		}
+	}
 }

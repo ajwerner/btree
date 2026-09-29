@@ -137,7 +137,7 @@ type iterator = Iterator[*latch, Key, struct{}]
 func checkIter(t *testing.T, it iterator, start, end int, spanMemo map[int]Span) {
 	i := start
 	for it.First(); it.Valid(); it.Next() {
-		la := it.Cur()
+		la := it.Key()
 		expected := spanWithMemo(i, spanMemo)
 		if !expected.Equal(la.span) {
 			t.Fatalf("expected %s, but found %s", expected, la.span)
@@ -150,7 +150,7 @@ func checkIter(t *testing.T, it iterator, start, end int, spanMemo map[int]Span)
 
 	for it.Last(); it.Valid(); it.Prev() {
 		i--
-		la := it.Cur()
+		la := it.Key()
 		expected := spanWithMemo(i, spanMemo)
 		if !expected.Equal(la.span) {
 			t.Fatalf("expected %s, but found %s", expected, la.span)
@@ -162,7 +162,7 @@ func checkIter(t *testing.T, it iterator, start, end int, spanMemo map[int]Span)
 
 	all := newLatch(spanWithEnd(start, end))
 	for it.FirstOverlap(all); it.Valid(); it.NextOverlap() {
-		la := it.Cur()
+		la := it.Key()
 		expected := spanWithMemo(i, spanMemo)
 		if !expected.Equal(la.span) {
 			t.Fatalf("expected %s, but found %s", expected, la.span)
@@ -189,13 +189,13 @@ func (k Key) Compare(o Key) int {
 type btree = *Map[*latch, Key, struct{}]
 
 func makeBTree() btree {
-	return New[*latch, Key, struct{}](
-		Key.Compare,
-		compareLatches,
-		func(l *latch) Key { return l.span.key },
-		func(l *latch) Key { return l.span.endKey },
-		func(l *latch) bool { return len(l.span.endKey) > 0 },
-	)
+	return New[*latch, Key, struct{}](Bounds[*latch, Key]{
+		Compare:          Key.Compare,
+		Key:              func(l *latch) Key { return l.span.key },
+		End:              func(l *latch) Key { return l.span.endKey },
+		HasEnd:           func(l *latch) bool { return len(l.span.endKey) > 0 },
+		CompareIntervals: compareLatches,
+	})
 }
 
 func TestBTree(t *testing.T) {
@@ -262,7 +262,7 @@ func TestBTreeSeek(t *testing.T) {
 		if !it.Valid() {
 			t.Fatalf("%d: expected valid iterator", i)
 		}
-		la := it.Cur()
+		la := it.Key()
 		expected := span(2 * ((i + 1) / 2))
 		if !expected.Equal(la.span) {
 			t.Fatalf("%d: expected %s, but found %s", i, expected, la.span)
@@ -278,7 +278,7 @@ func TestBTreeSeek(t *testing.T) {
 		if !it.Valid() {
 			t.Fatalf("%d: expected valid iterator", i)
 		}
-		la := it.Cur()
+		la := it.Key()
 		expected := span(2 * ((i - 1) / 2))
 		if !expected.Equal(la.span) {
 			t.Fatalf("%d: expected %s, but found %s", i, expected, la.span)
@@ -315,7 +315,7 @@ func TestBTreeSeekOverlap(t *testing.T) {
 			if !it.Valid() {
 				t.Fatalf("%d/%d: expected valid iterator", i, j)
 			}
-			la := it.Cur()
+			la := it.Key()
 			expected := spanWithEnd(expStart, expStart+size+1)
 			if !expected.Equal(la.span) {
 				t.Fatalf("%d: expected %s, but found %s", i, expected, la.span)
@@ -324,7 +324,7 @@ func TestBTreeSeekOverlap(t *testing.T) {
 			it.NextOverlap()
 		}
 		if it.Valid() {
-			t.Fatalf("%d: expected invalid iterator %v", i, it.Cur())
+			t.Fatalf("%d: expected invalid iterator %v", i, it.Key())
 		}
 	}
 	it.FirstOverlap(newLatch(span(count + size + 1)))
@@ -348,7 +348,7 @@ func TestBTreeSeekOverlap(t *testing.T) {
 			if !it.Valid() {
 				t.Fatalf("%d/%d: expected valid iterator", i, j)
 			}
-			la := it.Cur()
+			la := it.Key()
 			expected := spanWithEnd(expStart, expStart+size+1)
 			if !expected.Equal(la.span) {
 				t.Fatalf("%d: expected %s, but found %s", i, expected, la.span)
@@ -357,7 +357,7 @@ func TestBTreeSeekOverlap(t *testing.T) {
 			it.NextOverlap()
 		}
 		if it.Valid() {
-			t.Fatalf("%d: expected invalid iterator %v", i, it.Cur())
+			t.Fatalf("%d: expected invalid iterator %v", i, it.Key())
 		}
 	}
 	it.FirstOverlap(newLatch(span(count + size + 1)))
@@ -412,7 +412,7 @@ func TestBTreeSeekOverlapRandom(t *testing.T) {
 			it := tr.Iterator()
 			it.FirstOverlap(scanLa)
 			for it.Valid() {
-				found = append(found, it.Cur())
+				found = append(found, it.Key())
 				it.NextOverlap()
 			}
 
@@ -513,7 +513,7 @@ func all(tr *Map[*latch, Key, struct{}]) (out []*latch) {
 	it := tr.Iterator()
 	it.First()
 	for it.Valid() {
-		out = append(out, it.Cur())
+		out = append(out, it.Key())
 		it.Next()
 	}
 	return out
@@ -659,8 +659,8 @@ func BenchmarkBTreeIterSeekGE(b *testing.B) {
 				if !it.Valid() {
 					b.Fatal("expected to find key")
 				}
-				if !s.Equal(it.Cur().span) {
-					b.Fatalf("expected %s, but found %s", s, it.Cur().span)
+				if !s.Equal(it.Key().span) {
+					b.Fatalf("expected %s, but found %s", s, it.Key().span)
 				}
 			}
 		}
@@ -698,8 +698,8 @@ func BenchmarkBTreeIterSeekLT(b *testing.B) {
 						b.Fatal("expected to find key")
 					}
 					s := spans[j-1]
-					if !s.Equal(it.Cur().span) {
-						b.Fatalf("expected %s, but found %s", s, it.Cur().span)
+					if !s.Equal(it.Key().span) {
+						b.Fatalf("expected %s, but found %s", s, it.Key().span)
 					}
 				}
 			}
@@ -734,8 +734,8 @@ func BenchmarkBTreeIterFirstOverlap(b *testing.B) {
 				if !it.Valid() {
 					b.Fatal("expected to find key")
 				}
-				if !s.Equal(it.Cur().span) {
-					b.Fatalf("expected %s, but found %s", s, it.Cur().span)
+				if !s.Equal(it.Key().span) {
+					b.Fatalf("expected %s, but found %s", s, it.Key().span)
 				}
 			}
 		}

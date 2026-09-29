@@ -3,6 +3,12 @@
 * Date: 11/29/2021
 * Author: Andrew Werner 
 
+> **2026 note:** this post describes the library as first published. The
+> design survives, but the API has since moved on: `internal/abstract` is the
+> exported `aug` package, constructors are `New`/`NewSet` and return pointers,
+> augmentations can be described as monoids, and there is a mutating
+> `Cursor`. See the README for the current API.
+
 ## tl;dr
 
 [`github.com/ajwerner/btree`](https://github.com/ajwerner/btree) provides go1.18
@@ -59,7 +65,7 @@ fmt.Println(m.Get("foo"))
 fmt.Println(m.Get("baz"))
 it := m.Iterator()
 for it.First(); it.Valid(); it.Next() {
-    fmt.Println(it.Cur(), it.Value())
+    fmt.Println(it.Key(), it.Value())
 }
 // Output:
 // 1 true
@@ -105,7 +111,7 @@ for _, i := range rand.Perm(100) {
 fmt.Println(s.Len())
 it := m.Iterator()
 it.SeekNth(90)
-it.Println(s.Cur())
+it.Println(s.Key())
 // Output:
 // 100
 // 90
@@ -208,7 +214,7 @@ for _, p := range []pair{
 }
 it := m.Iterator()
 for it.FirstOverlap(pair{4, 5}); it.Valid(); it.NextOverlap() {
-    fmt.Println(it.Cur())
+    fmt.Println(it.Key())
 }
 // Output:
 // [0 6]

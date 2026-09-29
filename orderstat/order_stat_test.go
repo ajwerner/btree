@@ -33,12 +33,12 @@ func TestOrderStatTree(t *testing.T) {
 	iter := tree.Iterator()
 	iter.First()
 	for i, exp := range []int{2, 3, 4, 5} {
-		requireEqual(t, exp, iter.Cur())
+		requireEqual(t, exp, iter.Key())
 		requireEqual(t, i, iter.Rank())
 		iter.Next()
 	}
 	iter.SeekNth(2)
-	requireEqual(t, 4, iter.Cur())
+	requireEqual(t, 4, iter.Key())
 }
 
 func TestOrderStatNth(t *testing.T) {
@@ -73,10 +73,10 @@ func TestOrderStatNth(t *testing.T) {
 	iter := tree.Iterator()
 	for _, idx := range perm {
 		iter.SeekNth(idx)
-		requireEqual(t, items[idx], iter.Cur())
+		requireEqual(t, items[idx], iter.Key())
 		for i := idx + 1; i < N; i++ {
 			iter.Next()
-			requireEqual(t, items[i], iter.Cur())
+			requireEqual(t, items[i], iter.Key())
 		}
 		requireEqual(t, true, iter.Valid())
 		iter.Next()
@@ -97,7 +97,7 @@ func Example_blog() {
 	fmt.Println(s.Len())
 	it := s.Iterator()
 	it.SeekNth(90)
-	fmt.Println(it.Cur())
+	fmt.Println(it.Key())
 
 	// Output:
 	// 100
@@ -153,8 +153,8 @@ func testRankAndSeekNth(t *testing.T, degree int) {
 				idx = rng.IntN(n)
 			}
 			it.SeekNth(idx)
-			if !it.Valid() || it.Cur() != keys[idx] {
-				t.Fatalf("n=%d h=%d: SeekNth(%d) = %v %d, want %d", n, height, idx, it.Valid(), it.Cur(), keys[idx])
+			if !it.Valid() || it.Key() != keys[idx] {
+				t.Fatalf("n=%d h=%d: SeekNth(%d) = %v %d, want %d", n, height, idx, it.Valid(), it.Key(), keys[idx])
 			}
 			if r := it.Rank(); r != idx {
 				t.Fatalf("n=%d h=%d: Rank after SeekNth(%d) = %d", n, height, idx, r)
@@ -229,16 +229,16 @@ func TestOrderStatDifferential(t *testing.T) {
 		it := m.Iterator()
 		i := 0
 		for it.First(); it.Valid(); it.Next() {
-			if it.Cur() != keys[i] || it.Value() != ref[keys[i]] || it.Rank() != i {
-				t.Fatalf("position %d: (%d, %d) rank %d, want (%d, %d)", i, it.Cur(), it.Value(), it.Rank(), keys[i], ref[keys[i]])
+			if it.Key() != keys[i] || it.Value() != ref[keys[i]] || it.Rank() != i {
+				t.Fatalf("position %d: (%d, %d) rank %d, want (%d, %d)", i, it.Key(), it.Value(), it.Rank(), keys[i], ref[keys[i]])
 			}
 			i++
 		}
 		for j := 0; j < 32 && len(keys) > 0; j++ {
 			idx := rng.IntN(len(keys))
 			it.SeekNth(idx)
-			if it.Cur() != keys[idx] {
-				t.Fatalf("SeekNth(%d) = %d, want %d", idx, it.Cur(), keys[idx])
+			if it.Key() != keys[idx] {
+				t.Fatalf("SeekNth(%d) = %d, want %d", idx, it.Key(), keys[idx])
 			}
 		}
 	}

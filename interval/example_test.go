@@ -34,13 +34,11 @@ func (p pair[T]) first() T  { return p[0] }
 func (p pair[T]) second() T { return p[1] }
 
 func Example() {
-	m := interval.NewSet(
-		cmp.Compare[int],
-		pair[int].compare,
-		pair[int].first,
-		pair[int].second,
-		nil,
-	)
+	m := interval.NewSet(interval.Bounds[pair[int], int]{
+		Compare: cmp.Compare[int],
+		Key:     pair[int].first,
+		End:     pair[int].second,
+	})
 	for _, p := range []pair[int]{
 		{1, 2}, {2, 3}, {1, 5}, {0, 6}, {2, 7},
 	} {
@@ -48,7 +46,7 @@ func Example() {
 	}
 	it := m.Iterator()
 	for it.FirstOverlap(pair[int]{4, 5}); it.Valid(); it.NextOverlap() {
-		fmt.Println(it.Cur())
+		fmt.Println(it.Key())
 	}
 	// Output:
 	// [0 6]

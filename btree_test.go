@@ -32,7 +32,7 @@ func TestBTree(t *testing.T) {
 	it.First()
 	expected := []int{1, 2, 12}
 	for _, exp := range expected {
-		if got := it.Cur(); got != exp {
+		if got := it.Key(); got != exp {
 			t.Fatalf("expected %d, got %d", exp, got)
 		}
 		it.Next()
@@ -78,8 +78,8 @@ func checkMap(t *testing.T, tag string, m *Map[int, int], r *model, rng *rand.Ra
 	it := m.Iterator()
 	i := 0
 	for it.First(); it.Valid(); it.Next() {
-		if i >= len(keys) || it.Cur() != keys[i] || it.Value() != r.m[keys[i]] {
-			t.Fatalf("%s: forward position %d: got (%d, %d)", tag, i, it.Cur(), it.Value())
+		if i >= len(keys) || it.Key() != keys[i] || it.Value() != r.m[keys[i]] {
+			t.Fatalf("%s: forward position %d: got (%d, %d)", tag, i, it.Key(), it.Value())
 		}
 		i++
 	}
@@ -88,8 +88,8 @@ func checkMap(t *testing.T, tag string, m *Map[int, int], r *model, rng *rand.Ra
 	}
 	i = len(keys) - 1
 	for it.Last(); it.Valid(); it.Prev() {
-		if i < 0 || it.Cur() != keys[i] {
-			t.Fatalf("%s: reverse position %d: got %d", tag, i, it.Cur())
+		if i < 0 || it.Key() != keys[i] {
+			t.Fatalf("%s: reverse position %d: got %d", tag, i, it.Key())
 		}
 		i--
 	}
@@ -106,16 +106,16 @@ func checkMap(t *testing.T, tag string, m *Map[int, int], r *model, rng *rand.Ra
 		idx, _ := slices.BinarySearch(keys, k)
 		it.SeekGE(k)
 		if idx < len(keys) {
-			if !it.Valid() || it.Cur() != keys[idx] {
-				t.Fatalf("%s: SeekGE(%d) valid=%v cur=%d, want %d", tag, k, it.Valid(), it.Cur(), keys[idx])
+			if !it.Valid() || it.Key() != keys[idx] {
+				t.Fatalf("%s: SeekGE(%d) valid=%v cur=%d, want %d", tag, k, it.Valid(), it.Key(), keys[idx])
 			}
 		} else if it.Valid() {
 			t.Fatalf("%s: SeekGE(%d) should be invalid", tag, k)
 		}
 		it.SeekLT(k)
 		if idx > 0 {
-			if !it.Valid() || it.Cur() != keys[idx-1] {
-				t.Fatalf("%s: SeekLT(%d) valid=%v cur=%d, want %d", tag, k, it.Valid(), it.Cur(), keys[idx-1])
+			if !it.Valid() || it.Key() != keys[idx-1] {
+				t.Fatalf("%s: SeekLT(%d) valid=%v cur=%d, want %d", tag, k, it.Valid(), it.Key(), keys[idx-1])
 			}
 		} else if it.Valid() {
 			t.Fatalf("%s: SeekLT(%d) should be invalid", tag, k)
@@ -210,8 +210,8 @@ func testIteratorEdges(t *testing.T, degree, n int) {
 			}
 			return
 		}
-		if !it.Valid() || it.Cur() != 0 {
-			t.Fatalf("n=%d: Next after reset gives %v %d", n, it.Valid(), it.Cur())
+		if !it.Valid() || it.Key() != 0 {
+			t.Fatalf("n=%d: Next after reset gives %v %d", n, it.Valid(), it.Key())
 		}
 		// Next past the end stays invalid; Prev then yields the last key.
 		it.Last()
@@ -221,8 +221,8 @@ func testIteratorEdges(t *testing.T, degree, n int) {
 			t.Fatalf("n=%d: Next past end is valid", n)
 		}
 		it.Prev()
-		if !it.Valid() || it.Cur() != n-1 {
-			t.Fatalf("n=%d: Prev after end gives %v %d", n, it.Valid(), it.Cur())
+		if !it.Valid() || it.Key() != n-1 {
+			t.Fatalf("n=%d: Prev after end gives %v %d", n, it.Valid(), it.Key())
 		}
 		// Prev past the beginning stays invalid; Next then yields the first.
 		it.First()
@@ -232,8 +232,8 @@ func testIteratorEdges(t *testing.T, degree, n int) {
 			t.Fatalf("n=%d: Prev past beginning is valid", n)
 		}
 		it.Next()
-		if !it.Valid() || it.Cur() != 0 {
-			t.Fatalf("n=%d: Next after beginning gives %v %d", n, it.Valid(), it.Cur())
+		if !it.Valid() || it.Key() != 0 {
+			t.Fatalf("n=%d: Next after beginning gives %v %d", n, it.Valid(), it.Key())
 		}
 		// SeekGE past the end then Prev yields the last key.
 		it.SeekGE(n + 5)
@@ -241,8 +241,8 @@ func testIteratorEdges(t *testing.T, degree, n int) {
 			t.Fatalf("n=%d: SeekGE past end is valid", n)
 		}
 		it.Prev()
-		if !it.Valid() || it.Cur() != n-1 {
-			t.Fatalf("n=%d: Prev after SeekGE past end gives %v %d", n, it.Valid(), it.Cur())
+		if !it.Valid() || it.Key() != n-1 {
+			t.Fatalf("n=%d: Prev after SeekGE past end gives %v %d", n, it.Valid(), it.Key())
 		}
 		// SeekLT before the beginning then Next yields the first key.
 		it.SeekLT(0)
@@ -250,8 +250,8 @@ func testIteratorEdges(t *testing.T, degree, n int) {
 			t.Fatalf("n=%d: SeekLT before beginning is valid", n)
 		}
 		it.Next()
-		if !it.Valid() || it.Cur() != 0 {
-			t.Fatalf("n=%d: Next after SeekLT before beginning gives %v %d", n, it.Valid(), it.Cur())
+		if !it.Valid() || it.Key() != 0 {
+			t.Fatalf("n=%d: Next after SeekLT before beginning gives %v %d", n, it.Valid(), it.Key())
 		}
 	}
 }
