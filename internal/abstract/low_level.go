@@ -49,6 +49,15 @@ func (i *LowLevelIterator[K, V, A]) Depth() int {
 	return i.s.len()
 }
 
+// Frame returns the node and position of the ancestor frame at depth d,
+// where 0 is the root frame and Depth()-1 is the parent of the current
+// node. The position is the index of the child through which the iterator
+// descended. It is illegal to call with d outside [0, Depth()).
+func (i *LowLevelIterator[K, V, A]) Frame(d int) (*Node[K, V, A], int16) {
+	f := i.s.at(d)
+	return f.node, f.pos
+}
+
 // Child returns the augmentation of the child node at the current position.
 // It is illegal to call if this is a leaf node or there is no child
 // node at the current position.

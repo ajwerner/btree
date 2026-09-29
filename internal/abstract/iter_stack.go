@@ -57,6 +57,14 @@ func (is *iterStack[K, V, A]) pop() iterFrame[K, V, A] {
 	return is.a[is.aLen]
 }
 
+// at returns the frame at depth d, where 0 is the frame closest to the root.
+func (is *iterStack[K, V, A]) at(d int) iterFrame[K, V, A] {
+	if is.aLen == -1 {
+		return is.s[d]
+	}
+	return is.a[d]
+}
+
 func (is *iterStack[K, V, A]) len() int {
 	if is.aLen == -1 {
 		return len(is.s)

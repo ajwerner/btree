@@ -127,35 +127,34 @@ type Iterator[K, V any] struct {
 	abstract.Iterator[K, V, aug]
 }
 
-// Rank returns the rank of the current iterator position. If the iterator
-// is not valid, -1 is returned.
+// Rank returns the rank of the current iterator position, i.e. the number
+// of items in the collection which are less than the current item. If the
+// iterator is not valid, -1 is returned.
 func (it *Iterator[K, V]) Rank() int {
 	if !it.Valid() {
 		return -1
 	}
 	ll := lowLevel(it)
-	// If this is the root, then we want to figure out how many children are
-	// below the current point.
-
-	// Otherwise, we need to go up to the current parent, calculate everything
-	// less and then drop back down to the current node and add everything less.
+	// Every ancestor frame contributes the keys and the subtrees to the
+	// left of the child through which we descended.
 	var before int
-	if ll.Depth() > 0 {
-		pos := ll.Pos()
-		ll.Ascend()
-		for i, parentPos := int16(0), ll.Pos(); i < parentPos; i++ {
-			before += ll.Node().GetChild(i).children
+	for d, depth := 0, ll.Depth(); d < depth; d++ {
+		n, pos := ll.Frame(d)
+		for i := range pos {
+			before += n.GetChild(i).children
 		}
-		before += int(ll.Pos())
-		ll.Descend()
-		ll.SetPos(pos)
+		before += int(pos)
 	}
-	if !ll.IsLeaf() {
-		for i, pos := int16(0), ll.Pos(); i <= pos; i++ {
-			before += ll.Node().GetChild(i).children
+	// The current node contributes the keys to the left of the position and,
+	// if it is not a leaf, the subtrees up to and including the one at the
+	// position (which holds keys less than the key at the position).
+	n, pos := ll.Node(), ll.Pos()
+	if !n.IsLeaf() {
+		for i := int16(0); i <= pos; i++ {
+			before += n.GetChild(i).children
 		}
 	}
-	before += int(ll.Pos())
+	before += int(pos)
 	return before
 }
 
@@ -206,6 +205,6 @@ func lowLevel[K, V any](
 	return abstract.LowLevel(&it.Iterator)
 }
 
-var onErrorf = func(format string, args ...interface{}) {
+var onErrorf = func(format string, args ...any) {
 	panic(fmt.Errorf(format, args...))
 }

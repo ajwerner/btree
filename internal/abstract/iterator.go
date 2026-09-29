@@ -108,21 +108,26 @@ func (i *Iterator[K, V, A]) Last() {
 	i.pos = i.node.count - 1
 }
 
-// Next positions the Iterator to the key immediately following
-// its current position.
+// Next positions the Iterator to the key immediately following its current
+// position. If the Iterator is positioned before the first key (as after
+// Reset), Next positions it at the first key. If the Iterator is already
+// past the last key, Next leaves it there.
 func (i *Iterator[K, V, A]) Next() {
 	if i.node == nil {
 		return
 	}
 	ll := i.lowLevel()
 	if i.node.IsLeaf() {
-		i.pos++
 		if i.pos < i.node.count {
-			return
+			i.pos++
 		}
-		for i.s.len() > 0 && i.pos >= i.node.count {
+		for i.pos >= i.node.count && i.s.len() > 0 {
 			ll.Ascend()
 		}
+		return
+	}
+	if i.pos >= i.node.count {
+		// Past the end; stay there.
 		return
 	}
 	i.pos++
@@ -134,25 +139,29 @@ func (i *Iterator[K, V, A]) Next() {
 	i.pos = 0
 }
 
-// Prev positions the Iterator to the key immediately preceding
-// its current position.
+// Prev positions the Iterator to the key immediately preceding its current
+// position. If the Iterator is positioned past the last key, Prev positions
+// it at the last key. If the Iterator is already before the first key (as
+// after Reset), Prev leaves it there.
 func (i *Iterator[K, V, A]) Prev() {
 	if i.node == nil {
 		return
 	}
 	ll := i.lowLevel()
 	if i.node.IsLeaf() {
-		i.pos--
 		if i.pos >= 0 {
-			return
+			i.pos--
 		}
-		for i.s.len() > 0 && i.pos < 0 {
+		for i.pos < 0 && i.s.len() > 0 {
 			ll.Ascend()
 			i.pos--
 		}
 		return
 	}
-
+	if i.pos < 0 {
+		// Before the beginning; stay there.
+		return
+	}
 	ll.Descend()
 	for !i.node.IsLeaf() {
 		i.pos = i.node.count

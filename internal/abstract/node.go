@@ -131,6 +131,7 @@ func (n *Node[K, V, A]) clone(
 	c.count = n.count
 	c.aug = n.aug
 	c.keys = n.keys
+	c.values = n.values
 	if !c.IsLeaf() {
 		// Copy children and increase each refcount.
 		*c.children = *n.children
