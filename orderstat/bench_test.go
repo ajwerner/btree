@@ -115,3 +115,32 @@ func BenchmarkSeekGE(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkRankAfterNext measures Rank at the cursor while stepping, the
+// pattern an eager per-frame prefix would speed up.
+func BenchmarkRankAfterNext(b *testing.B) {
+	for _, n := range []int{10_000, 1_000_000} {
+		s, _ := benchSet(n)
+		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
+			it := s.Iterator()
+			it.First()
+			for b.Loop() {
+				it.Next()
+				if !it.Valid() {
+					it.First()
+				}
+				it.Rank()
+			}
+		})
+		b.Run(fmt.Sprintf("NextOnly/n=%d", n), func(b *testing.B) {
+			it := s.Iterator()
+			it.First()
+			for b.Loop() {
+				it.Next()
+				if !it.Valid() {
+					it.First()
+				}
+			}
+		})
+	}
+}
