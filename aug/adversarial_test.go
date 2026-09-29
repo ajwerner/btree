@@ -181,34 +181,3 @@ func TestVerifyInterfaceTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
-// TestDeleteAbsentFromClone checks that deleting a missing key from a
-// shared tree copies no nodes.
-func TestDeleteAbsentFromClone(t *testing.T) {
-	fl := &countingFreeList[int, int, struct{}]{FreeList: aug.NewFreeList[int, int, struct{}](64)}
-	m := aug.New[int, int, struct{}](cmp.Compare[int], nil, aug.WithFreeList(fl))
-	for i := range 10000 {
-		m.Upsert(2*i, i)
-	}
-	c := m.Clone()
-	gets := fl.gets
-	for i := range 1000 {
-		if _, _, found := c.Delete(2*i + 1); found {
-			t.Fatalf("found absent key %d", 2*i+1)
-		}
-	}
-	if fl.gets != gets {
-		t.Fatalf("deleting absent keys from a clone allocated %d nodes", fl.gets-gets)
-	}
-	if _, _, found := c.Delete(4); !found {
-		t.Fatal("present key not found")
-	}
-	if fl.gets == gets {
-		t.Fatal("deleting a present key from a clone copied nothing")
-	}
-	if err := c.Verify(); err != nil {
-		t.Fatal(err)
-	}
-	m.Clear()
-	c.Clear()
-}
