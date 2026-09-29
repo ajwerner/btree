@@ -14,10 +14,13 @@ interval     Map/Set with A = upper bound of the subtree: overlap scans
 ```
 
 `aug` is the whole implementation; the other packages are thin wrappers that
-fix the augmentation and add the queries it enables. Each wrapper embeds
-`*aug.Map`, so the map methods are promoted and the wrapper only declares
-what differs (constructors, `Clone` with the right return type, set
-conveniences).
+fix the augmentation and add the queries it enables. Each wrapper is a
+defined type over the `aug` type (`type Map[K, V any] aug.Map[K, V,
+struct{}]`) with explicit forwarding methods, so it has the same memory
+representation, the conversion is free, `New` and `Clone` allocate once,
+and a method call is a direct call. Embedding a pointer would have meant a
+second allocation and an indirection per call. `aug.MonoidMap` likewise
+embeds `Map` by value.
 
 ## Nodes
 

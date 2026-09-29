@@ -18,27 +18,28 @@ import "cmp"
 
 // MonoidMap is a Map whose augmentation is a Monoid, which makes aggregate
 // queries available: Total, Prefix and Aggregate on the map, Prefix and
-// SeekWhere on its iterators and cursors. It embeds *Map and so offers
+// SeekWhere on its iterators and cursors. It embeds Map and so offers
 // everything a Map does.
 type MonoidMap[K, V, A any] struct {
-	*Map[K, V, A]
+	Map[K, V, A]
 }
 
 // NewMonoid constructs a MonoidMap maintaining the augmentation described
 // by m (see MonoidUpdater). See WithDegree and WithFreeList for the
 // options.
 func NewMonoid[K, V, A any](cmp func(K, K) int, m Monoid[K, V, A], opts ...Option) *MonoidMap[K, V, A] {
-	return &MonoidMap[K, V, A]{Map: New(cmp, MonoidUpdater(m), opts...)}
+	return &MonoidMap[K, V, A]{Map: Map[K, V, A]{cfg: makeConfig(cmp, MonoidUpdater(m), opts)}}
 }
 
 // NewOrderedMonoid is NewMonoid for keys that support <; see NewOrdered.
 func NewOrderedMonoid[K cmp.Ordered, V, A any](m Monoid[K, V, A], opts ...Option) *MonoidMap[K, V, A] {
-	return &MonoidMap[K, V, A]{Map: NewOrdered(MonoidUpdater(m), opts...)}
+	opts = append(opts, withFind(findOrdered[K, V, A]))
+	return &MonoidMap[K, V, A]{Map: Map[K, V, A]{cfg: makeConfig(cmp.Compare[K], MonoidUpdater(m), opts)}}
 }
 
 // Clone clones the MonoidMap, lazily. It does so in constant time.
 func (t *MonoidMap[K, V, A]) Clone() *MonoidMap[K, V, A] {
-	return &MonoidMap[K, V, A]{Map: t.Map.Clone()}
+	return &MonoidMap[K, V, A]{Map: t.Map.clone()}
 }
 
 // Total returns the aggregate over every entry in the map.

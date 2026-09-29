@@ -67,6 +67,12 @@ func (t *Map[K, V, A]) Clear() {
 // Clone clones the Map, lazily. It does so in constant time. The clone
 // shares the receiver's free list.
 func (t *Map[K, V, A]) Clone() *Map[K, V, A] {
+	c := t.clone()
+	return &c
+}
+
+// clone is Clone by value, for types that embed Map.
+func (t *Map[K, V, A]) clone() Map[K, V, A] {
 	if t.root != nil {
 		// Incrementing the reference count on the root node is sufficient to
 		// ensure that no node in the cloned tree can be mutated by an actor
@@ -84,8 +90,7 @@ func (t *Map[K, V, A]) Clone() *Map[K, V, A] {
 		// over the entire tree.
 		t.root.incRef()
 	}
-	c := *t
-	return &c
+	return *t
 }
 
 // Delete removes the item with the given key from the tree, returning it.

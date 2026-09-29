@@ -33,6 +33,9 @@ A rewrite of the core with the same design. Every change below is on
   a new `Replacement` action.
 - The aggregate queries live on `MonoidMap`, `MonoidIterator` and
   `MonoidCursor`, returned by `NewMonoid`/`NewOrderedMonoid`.
+- `btree.Map`, `orderstat.Map` and `interval.Map` (and their sets) are
+  defined types over the `aug` types rather than structs holding a pointer:
+  one allocation, free conversion, no indirection.
 - Requires Go 1.26. No dependencies.
 
 ### Added
