@@ -23,16 +23,6 @@ import (
 // Cmp is a comparison function.
 type Cmp[T any] func(T, T) int
 
-// Interval represents an interval with bounds from [Key(), End()) where
-// Key() is inclusive and End() is exclusive. If Key() == End(), then the
-// Inteval represents a point that only includes that value. Intervals with
-// Key() which is larger than End() are invalid and may result in panics
-// upon insertion.
-type Interval[K any] interface {
-	Key() K
-	End() K
-}
-
 type IntervalWithID[K, ID any] interface {
 	Interval[K]
 	ID() ID

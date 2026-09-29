@@ -31,9 +31,9 @@ type Iterator[I, K, V any] struct {
 // latch in order of the overlapping latches' start keys. The goal of the scan
 // is to minimize the number of key comparisons performed in total. The
 // algorithm operates based on the following two invariants maintained by
-// augmented interval abstract:
-//  1. all latches are sorted in the abstract based on their start key.
-//  2. all abstract nodes maintain the upper bound end key of all latches
+// augmented interval tree:
+//  1. all latches are sorted in the tree based on their start key.
+//  2. all tree nodes maintain the upper bound end key of all latches
 //     in their subtree.
 //
 // The scan algorithm starts in "unconstrained minimum" and "unconstrained
@@ -41,13 +41,13 @@ type Iterator[I, K, V any] struct {
 // latches in the tree with start keys above the search range's start key.
 // Because latches in the tree are sorted by start key, once the scan enters the
 // "constrained minimum" state it will remain there. To enter a "constrained
-// maximum" state, the scan must determine the first child abstract node in a given
+// maximum" state, the scan must determine the first child node in a given
 // subtree that can have latches with start keys above the search range's end
 // key. The scan then remains in the "constrained maximum" state until it
 // traverse into this child node, at which point it moves to the "unconstrained
 // maximum" state again.
 //
-// The scan algorithm works like a standard abstract forward scan with the
+// The scan algorithm works like a standard B-tree forward scan with the
 // following augmentations:
 //  1. before tranversing the tree, the scan performs a binary search on the
 //     root node's items to determine a "soft" lower-bound constraint position
@@ -59,7 +59,7 @@ type Iterator[I, K, V any] struct {
 //     of the search range. The children followed will be equal to or less
 //     than the soft lower bound constraint.
 //  4. once the initial tranversal completes and the scan is in the left-most
-//     abstract node whose upper bound overlaps the search range, key comparisons
+//     node whose upper bound overlaps the search range, key comparisons
 //     must be performed with each latch in the tree. This is necessary because
 //     any of these latches may have end keys that cause them to overlap with the
 //     search range.
@@ -93,7 +93,7 @@ func (o *overlapScan[I, K, V]) empty() bool {
 	return !o.set
 }
 
-// FirstOverlap seeks to the first latch in the abstract that overlaps with the
+// FirstOverlap seeks to the first interval in the tree that overlaps with the
 // provided search latch.
 func (i *Iterator[I, K, V]) FirstOverlap(bounds I) {
 	i.Reset()

@@ -53,6 +53,24 @@ type Bounds[I, K any] struct {
 	CompareIntervals func(I, I) int
 }
 
+// Interval is implemented by interval types that expose their own bounds:
+// Key is the inclusive start and End the exclusive end.
+type Interval[K any] interface {
+	Key() K
+	End() K
+}
+
+// BoundsOf returns Bounds for an interval type that exposes its own bounds,
+// with the default HasEnd and CompareIntervals. The interval type is given
+// explicitly and K is inferred: BoundsOf[span](cmp.Compare[int]).
+func BoundsOf[I Interval[K], K any](compare func(K, K) int) Bounds[I, K] {
+	return Bounds[I, K]{
+		Compare: compare,
+		Key:     I.Key,
+		End:     I.End,
+	}
+}
+
 func (b Bounds[I, K]) withDefaults() Bounds[I, K] {
 	if b.Compare == nil || b.Key == nil || b.End == nil {
 		panic("interval: Bounds.Compare, Key and End are required")
