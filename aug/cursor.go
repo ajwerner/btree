@@ -143,14 +143,16 @@ func (c *Cursor[K, V, A]) Delete() (K, V) {
 		return k, v
 	}
 	k := c.Key()
-	k, v, _ := t.Delete(k)
+	_, v, _ := t.Delete(k)
 	c.SeekGE(k)
 	return k, v
 }
 
 // Rekey moves the current entry to key k, keeping its value. The cursor
 // must be valid. If another entry has key k it is replaced. Afterwards the
-// cursor is on the moved entry.
+// cursor is on the moved entry. When k still sorts between the entry's
+// neighbours the move is in place and the Updater sees a Replacement whose
+// key changed; otherwise it sees the Removal and Insertion of the fallback.
 func (c *Cursor[K, V, A]) Rekey(k K) {
 	if !c.Valid() {
 		panic("aug: Rekey on an invalid Cursor")

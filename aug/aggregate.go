@@ -206,12 +206,12 @@ func (i *Iterator[K, V, A]) SeekWhere(pred func(prefix, contribution A) bool) A 
 		}
 		if pos > count {
 			// Nothing qualifies in this subtree; leave the iterator past
-			// the end.
+			// the end and return the total, as documented.
 			for i.s.len() > 0 {
 				ll.Ascend()
 			}
 			i.pos = i.node.Count()
-			return p
+			return i.r.root.aug
 		}
 		i.pos = int16(pos)
 		ll.Descend()

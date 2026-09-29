@@ -18,6 +18,7 @@ package aug
 import (
 	"cmp"
 	"strings"
+	"sync/atomic"
 )
 
 // Map is an augmented copy-on-write B-tree map from K to V. Each node
@@ -92,6 +93,13 @@ func (t *Map[K, V, A]) Clone() *Map[K, V, A] {
 func (t *Map[K, V, A]) Delete(k K) (removedK K, v V, found bool) {
 	if t.root == nil || len(t.root.keys) == 0 {
 		return removedK, v, false
+	}
+	if atomic.LoadInt32(&t.root.ref) != 1 {
+		// The tree is shared: the mutating descent would copy the path
+		// before learning whether k exists, so check first.
+		if _, ok := t.Get(k); !ok {
+			return removedK, v, false
+		}
 	}
 	if removedK, v, found, _ = mut(&t.cfg, &t.root).remove(&t.cfg, k); found {
 		t.length--

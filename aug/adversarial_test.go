@@ -50,7 +50,11 @@ func TestSeekWhereNonMonotone(t *testing.T) {
 					t.Fatalf("at key %d with prefix %d", it.Key(), prefix)
 				}
 			} else {
-				// Past the end: the iterator behaves like one that ran off.
+				// Past the end: the total is returned and the iterator
+				// behaves like one that ran off.
+				if prefix != 5000 {
+					t.Fatalf("past the end with prefix %d, want the total", prefix)
+				}
 				it.Prev()
 				if !it.Valid() || it.Key() != 4999 {
 					t.Fatalf("Prev after a failed SeekWhere gave valid=%v %d", it.Valid(), it.Key())
@@ -135,4 +139,76 @@ func TestDeepTree(t *testing.T) {
 	if v, ok := m.Get(0); !ok || v != 0 {
 		t.Fatalf("original changed: %d %v", v, ok)
 	}
+}
+
+func TestDegreeBounds(t *testing.T) {
+	for _, d := range []int{1, aug.MaxDegree + 1} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("degree %d accepted", d)
+				}
+			}()
+			aug.New[int, int, struct{}](cmp.Compare[int], nil, aug.WithDegree(d))
+		}()
+	}
+	m := aug.New[int, int, struct{}](cmp.Compare[int], nil, aug.WithDegree(aug.MaxDegree))
+	for i := range 3 * aug.MaxDegree {
+		m.Upsert(i, i)
+	}
+	it := m.Iterator()
+	n := 0
+	for it.First(); it.Valid(); it.Next() {
+		n++
+	}
+	if n != 3*aug.MaxDegree || m.Height() != 2 {
+		t.Fatalf("iterated %d of %d entries, height %d", n, m.Len(), m.Height())
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestVerifyInterfaceTypes(t *testing.T) {
+	m := aug.New[any, any, struct{}](func(a, b any) int { return cmp.Compare(a.(int), b.(int)) }, nil, aug.WithDegree(2))
+	for i := range 100 {
+		m.Upsert(i, i)
+	}
+	for i := 0; i < 100; i += 3 {
+		m.Delete(i)
+	}
+	if err := m.Verify(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestDeleteAbsentFromClone checks that deleting a missing key from a
+// shared tree copies no nodes.
+func TestDeleteAbsentFromClone(t *testing.T) {
+	fl := &countingFreeList[int, int, struct{}]{FreeList: aug.NewFreeList[int, int, struct{}](64)}
+	m := aug.New[int, int, struct{}](cmp.Compare[int], nil, aug.WithFreeList(fl))
+	for i := range 10000 {
+		m.Upsert(2*i, i)
+	}
+	c := m.Clone()
+	gets := fl.gets
+	for i := range 1000 {
+		if _, _, found := c.Delete(2*i + 1); found {
+			t.Fatalf("found absent key %d", 2*i+1)
+		}
+	}
+	if fl.gets != gets {
+		t.Fatalf("deleting absent keys from a clone allocated %d nodes", fl.gets-gets)
+	}
+	if _, _, found := c.Delete(4); !found {
+		t.Fatal("present key not found")
+	}
+	if fl.gets == gets {
+		t.Fatal("deleting a present key from a clone copied nothing")
+	}
+	if err := c.Verify(); err != nil {
+		t.Fatal(err)
+	}
+	m.Clear()
+	c.Clear()
 }

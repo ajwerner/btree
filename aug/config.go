@@ -14,12 +14,19 @@
 
 package aug
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // DefaultDegree is the degree used by New when WithDegree is not given. A
 // tree of degree d holds between d-1 and 2d-1 entries in every node except
 // the root.
 const DefaultDegree = 16
+
+// MaxDegree is the largest degree New accepts; positions within a node are
+// 16-bit.
+const MaxDegree = (math.MaxInt16 + 1) / 2
 
 // DefaultFreeListSize is the capacity of the free list created by New when
 // WithFreeList is not given. A clone that is written to and then cleared
@@ -101,8 +108,10 @@ const (
 	Insertion
 
 	// Replacement indicates that an entry in the subtree rooted at this
-	// node was replaced by another with an equal key. RelevantKey and
-	// RelevantValue are the new entry; PrevKey and PrevValue the old.
+	// node was replaced by another at the same position. RelevantKey and
+	// RelevantValue are the new entry; PrevKey and PrevValue the old. The
+	// keys are equal, except for Cursor.Rekey, where the new key still
+	// sorts between the same neighbours as the old one.
 	Replacement
 )
 
@@ -162,8 +171,8 @@ func makeConfig[K, V, A any](
 	for _, opt := range opts {
 		opt.apply(&o)
 	}
-	if o.degree < 2 {
-		panic(fmt.Sprintf("btree: degree must be at least 2, got %d", o.degree))
+	if o.degree < 2 || o.degree > MaxDegree {
+		panic(fmt.Sprintf("btree: degree must be in [2, %d], got %d", MaxDegree, o.degree))
 	}
 	var fl FreeList[K, V, A]
 	if o.freeList != nil {

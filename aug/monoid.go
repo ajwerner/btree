@@ -16,8 +16,13 @@ package aug
 
 // Monoid describes an augmentation that is the combination of per-entry
 // contributions: the augmentation of a subtree is Combine folded over Of of
-// every entry in it, in key order. The zero value of A must be the identity
-// of Combine, and Combine must be associative.
+// every entry in it. The zero value of A must be the identity of Combine,
+// and Combine must be associative and commutative: the Updater folds
+// contributions in whatever order the tree operations produce them (a new
+// entry is combined onto the right of a node's aggregate wherever it
+// sits). Counts, sums, minima, maxima and bounds all qualify; an
+// order-dependent aggregate such as concatenation needs a hand-written
+// Updater that recomputes nodes.
 //
 // A Map whose Updater comes from MonoidUpdater supports Prefix, Aggregate,
 // Total, Iterator.Prefix and Iterator.SeekWhere.
@@ -26,8 +31,7 @@ type Monoid[K, V, A any] interface {
 	// Of returns the contribution of a single entry.
 	Of(k K, v V) A
 
-	// Combine combines the aggregates of two adjacent spans, a to the left
-	// of b.
+	// Combine combines the aggregates of two spans.
 	Combine(a, b A) A
 }
 

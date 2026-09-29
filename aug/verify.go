@@ -41,6 +41,13 @@ func (t *Map[K, V, A]) Verify() error {
 	return nil
 }
 
+// isZero reports whether x is the zero value of its type, including a nil
+// interface, for which reflect.ValueOf returns the invalid Value.
+func isZero[T any](x T) bool {
+	v := reflect.ValueOf(x)
+	return !v.IsValid() || v.IsZero()
+}
+
 type verifier[K, V, A any] struct {
 	cfg       *config[K, V, A]
 	items     int
@@ -107,12 +114,12 @@ func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, h
 		}
 	}
 	for i, k := range n.keys[len(n.keys):cap(n.keys)] {
-		if !reflect.ValueOf(k).IsZero() {
+		if !isZero(k) {
 			return fmt.Errorf("node at depth %d has stale key at %d", depth, len(n.keys)+i)
 		}
 	}
 	for i, v := range n.values[len(n.values):cap(n.values)] {
-		if !reflect.ValueOf(v).IsZero() {
+		if !isZero(v) {
 			return fmt.Errorf("node at depth %d has stale value at %d", depth, len(n.values)+i)
 		}
 	}

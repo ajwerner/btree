@@ -89,13 +89,15 @@ Each node carries an `A`. An `Updater` is called with the node and an
 `UpdateInfo` after every structural change: `Insertion` and `Removal` of an
 entry below the node (with the moved subtree's aggregate on rebalances),
 `Split` (the node is the left half; the right half's aggregate is given),
-`Replacement` of an entry with an equal key, and `Default` (recompute from
-scratch). The return value says whether the node's aggregate changed and so
+`Replacement` of an entry at its position (with an equal key, or, for an
+in-place `Cursor.Rekey`, a key that still sorts between the same
+neighbours), and `Default` (recompute from scratch). The return value says whether the node's aggregate changed and so
 whether ancestors need updating; the write paths stop propagating as soon
 as it is false.
 
-Most augmentations are monoids: an aggregate is `Combine` folded over `Of`
-of every entry. `MonoidUpdater` implements `Updater` for any `Monoid`, in
+Most augmentations are commutative monoids: an aggregate is `Combine`
+folded over `Of` of every entry, in whatever order the operations produce
+them. `MonoidUpdater` implements `Updater` for any `Monoid`, in
 O(1) per level for `Group`s (which can `Uncombine`) and by recomputing the
 node otherwise. An optional `Equaler` supplies the changed check and an
 optional `Folder` folds a span of a node in one call, which matters because
