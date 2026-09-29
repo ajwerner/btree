@@ -80,6 +80,9 @@ func (m *Map[K, V]) Upsert(k K, v V) (replacedK K, replacedV V, replaced bool) {
 // Get returns the value for k, if any.
 func (m *Map[K, V]) Get(k K) (v V, ok bool) { return m.a().Get(k) }
 
+// Lookup returns the stored entry whose key compares equal to k, if any.
+func (m *Map[K, V]) Lookup(k K) (key K, v V, ok bool) { return m.a().Lookup(k) }
+
 // Len returns the number of entries.
 func (m *Map[K, V]) Len() int { return m.a().Len() }
 
@@ -176,18 +179,15 @@ func (s *Set[T]) Delete(item T) (removed T, ok bool) {
 
 // Contains reports whether an item equal to item is in the set.
 func (s *Set[T]) Contains(item T) bool {
-	_, found := s.Get(item)
-	return found
+	_, ok := s.m().a().Get(item)
+	return ok
 }
 
 // Get returns the item in the set equal to probe, if any. Items that
 // compare equal may differ in fields the comparison ignores.
 func (s *Set[T]) Get(probe T) (item T, found bool) {
-	it := s.m().a().Iterator()
-	if it.SeekExact(probe) {
-		return it.Key(), true
-	}
-	return item, false
+	item, _, found = s.m().a().Lookup(probe)
+	return item, found
 }
 
 // Len returns the number of items.

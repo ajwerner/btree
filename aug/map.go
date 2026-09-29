@@ -174,18 +174,25 @@ func (t *Map[K, V, A]) Len() int {
 
 // Get returns the value associated with the requested key, if it exists.
 func (t *Map[K, V, A]) Get(k K) (v V, ok bool) {
+	_, v, ok = t.Lookup(k)
+	return v, ok
+}
+
+// Lookup returns the stored entry whose key compares equal to k, if any.
+// The stored key may differ from k in fields the comparison ignores.
+func (t *Map[K, V, A]) Lookup(k K) (key K, v V, ok bool) {
 	n := t.root
 	for n != nil {
 		i, found := n.find(&t.cfg, k)
 		if found {
-			return n.values[i], true
+			return n.keys[i], n.values[i], true
 		}
 		if n.IsLeaf() {
 			break
 		}
 		n = n.children[i]
 	}
-	return v, false
+	return key, v, false
 }
 
 // Compare compares two keys using the Map's comparison function.

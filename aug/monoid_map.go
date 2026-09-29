@@ -70,6 +70,9 @@ func (t *MonoidMap[K, V, A]) Upsert(k K, v V) (replacedK K, replacedV V, replace
 // Get returns the value for k, if any.
 func (t *MonoidMap[K, V, A]) Get(k K) (v V, ok bool) { return t.a().Get(k) }
 
+// Lookup returns the stored entry whose key compares equal to k, if any.
+func (t *MonoidMap[K, V, A]) Lookup(k K) (key K, v V, ok bool) { return t.a().Lookup(k) }
+
 // Len returns the number of entries.
 func (t *MonoidMap[K, V, A]) Len() int { return t.a().Len() }
 
