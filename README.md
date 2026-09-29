@@ -7,7 +7,7 @@ A Go generic library providing copy-on-write B-tree data structures including ma
 
 **Note:** This library is still in beta. Please report any issues on the [GitHub issue tracker](https://github.com/ajwerner/btree/issues).
 
-Read more about the design in the [blog post](./blog/blog.md) (which predates the `aug` package and the `New` constructors).
+Read about the design in [docs/design.md](./docs/design.md); the original [blog post](./blog/blog.md) predates the `aug` package and the `New` constructors.
 
 ```go
 m := btree.NewOrdered[string, int](btree.WithDegree(16)) // or New(strings.Compare, ...)

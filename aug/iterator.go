@@ -15,7 +15,11 @@
 
 package aug
 
-// Iterator is responsible for search and traversal within a Map.
+// Iterator is responsible for search and traversal within a Map. It holds
+// the path from the root to its position, so it must not be copied once
+// positioned; take a fresh one from Map.Iterator instead. Reset, First,
+// Last, SeekGE and SeekLT position it from scratch and are safe after any
+// mutation of the Map; the other methods are not.
 type Iterator[K, V, A any] struct {
 	r *Map[K, V, A]
 	iterFrame[K, V, A]
