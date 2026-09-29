@@ -27,22 +27,22 @@ type Iterator[I, K, V any] struct {
 	o overlapScan[I, K, V]
 }
 
-// An overlap scan is a scan over all latches that overlap with the provided
-// latch in order of the overlapping latches' start keys. The goal of the scan
+// An overlap scan is a scan over all intervals that overlap with the provided
+// interval in order of the overlapping intervals' start keys. The goal of the scan
 // is to minimize the number of key comparisons performed in total. The
 // algorithm operates based on the following two invariants maintained by
 // augmented interval tree:
-//  1. all latches are sorted in the tree based on their start key.
-//  2. all tree nodes maintain the upper bound end key of all latches
+//  1. all intervals are sorted in the tree based on their start key.
+//  2. all tree nodes maintain the upper bound end key of all intervals
 //     in their subtree.
 //
 // The scan algorithm starts in "unconstrained minimum" and "unconstrained
 // maximum" states. To enter a "constrained minimum" state, the scan must reach
-// latches in the tree with start keys above the search range's start key.
-// Because latches in the tree are sorted by start key, once the scan enters the
+// intervals in the tree with start keys above the search range's start key.
+// Because intervals in the tree are sorted by start key, once the scan enters the
 // "constrained minimum" state it will remain there. To enter a "constrained
 // maximum" state, the scan must determine the first child node in a given
-// subtree that can have latches with start keys above the search range's end
+// subtree that can have intervals with start keys above the search range's end
 // key. The scan then remains in the "constrained maximum" state until it
 // traverse into this child node, at which point it moves to the "unconstrained
 // maximum" state again.
@@ -60,16 +60,16 @@ type Iterator[I, K, V any] struct {
 //     than the soft lower bound constraint.
 //  4. once the initial tranversal completes and the scan is in the left-most
 //     node whose upper bound overlaps the search range, key comparisons
-//     must be performed with each latch in the tree. This is necessary because
-//     any of these latches may have end keys that cause them to overlap with the
+//     must be performed with each interval in the tree. This is necessary because
+//     any of these intervals may have end keys that cause them to overlap with the
 //     search range.
-//  5. once the scan reaches the lower bound constraint position (the first latch
+//  5. once the scan reaches the lower bound constraint position (the first interval
 //     with a start key equal to or greater than the search range's start key),
 //     it can begin scaning without performing key comparisons. This is allowed
-//     because all latches from this point forward will have end keys that are
+//     because all intervals from this point forward will have end keys that are
 //     greater than the search range's start key.
 //  6. once the scan reaches the upper bound constraint position, it terminates.
-//     It does so because the latch at this position is the first latch with a
+//     It does so because the interval at this position is the first interval with a
 //     start key larger than the search range's end key.
 type overlapScan[I, K, V any] struct {
 	bounds I
@@ -94,7 +94,7 @@ func (o *overlapScan[I, K, V]) empty() bool {
 }
 
 // FirstOverlap seeks to the first interval in the tree that overlaps with the
-// provided search latch.
+// provided search interval.
 func (i *Iterator[I, K, V]) FirstOverlap(bounds I) {
 	i.Reset()
 	it := lowLevel(i)
@@ -161,8 +161,8 @@ func (i *Iterator[I, K, V]) SeekLT(bounds I) bool {
 	return i.Iterator.SeekLT(bounds)
 }
 
-// NextOverlap positions the iterator to the latch immediately following
-// its current position that overlaps with the search latch.
+// NextOverlap positions the iterator to the interval immediately following
+// its current position that overlaps with the search interval.
 func (i *Iterator[I, K, V]) NextOverlap() {
 	if !i.Valid() {
 		return
@@ -241,10 +241,10 @@ func (i *Iterator[I, K, V]) findNextOverlap() {
 
 		// Iterate across node.
 		if ll.Pos() < ll.Node().Count() {
-			// Check for overlapping latch.
+			// Check for overlapping interval.
 			if i.o.constrMinReached {
 				// Fast-path to avoid span comparison. i.o.constrMinReached
-				// tells us that all latches have end keys above our search
+				// tells us that all intervals have end keys above our search
 				// span's start key.
 				return
 			}
