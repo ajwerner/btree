@@ -16,9 +16,8 @@ package interval
 
 import (
 	"cmp"
+	"slices"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 // Interval represents an interval with bounds from [Key(), End()) where
@@ -104,6 +103,8 @@ func TestIntervalTree(t *testing.T) {
 		for iter.FirstOverlap(tc.q); iter.Valid(); iter.NextOverlap() {
 			res = append(res, iter.Cur())
 		}
-		require.Equal(t, tc.res, res)
+		if !slices.Equal(tc.res, res) {
+			t.Fatalf("expected %v, got %v", tc.res, res)
+		}
 	}
 }

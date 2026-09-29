@@ -35,12 +35,12 @@ func getNodePool[K, V, A any]() *nodePool[K, V, A] {
 func newNodePool[K, V, A any]() *nodePool[K, V, A] {
 	np := nodePool[K, V, A]{}
 	np.leafNodePool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return new(Node[K, V, A])
 		},
 	}
 	np.interiorNodePool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			n := new(interiorNode[K, V, A])
 			n.Node.children = &n.children
 			return &n.Node

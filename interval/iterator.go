@@ -32,9 +32,9 @@ type Iterator[I, K, V any] struct {
 // is to minimize the number of key comparisons performed in total. The
 // algorithm operates based on the following two invariants maintained by
 // augmented interval abstract:
-// 1. all latches are sorted in the abstract based on their start key.
-// 2. all abstract nodes maintain the upper bound end key of all latches
-//    in their subtree.
+//  1. all latches are sorted in the abstract based on their start key.
+//  2. all abstract nodes maintain the upper bound end key of all latches
+//     in their subtree.
 //
 // The scan algorithm starts in "unconstrained minimum" and "unconstrained
 // maximum" states. To enter a "constrained minimum" state, the scan must reach
@@ -49,28 +49,28 @@ type Iterator[I, K, V any] struct {
 //
 // The scan algorithm works like a standard abstract forward scan with the
 // following augmentations:
-// 1. before tranversing the tree, the scan performs a binary search on the
-//    root node's items to determine a "soft" lower-bound constraint position
-//    and a "hard" upper-bound constraint position in the root's children.
-// 2. when tranversing into a child node in the lower or upper bound constraint
-//    position, the constraint is refined by searching the child's items.
-// 3. the initial traversal down the tree follows the left-most children
-//    whose upper bound end keys are equal to or greater than the start key
-//    of the search range. The children followed will be equal to or less
-//    than the soft lower bound constraint.
-// 4. once the initial tranversal completes and the scan is in the left-most
-//    abstract node whose upper bound overlaps the search range, key comparisons
-//    must be performed with each latch in the tree. This is necessary because
-//    any of these latches may have end keys that cause them to overlap with the
-//    search range.
-// 5. once the scan reaches the lower bound constraint position (the first latch
-//    with a start key equal to or greater than the search range's start key),
-//    it can begin scaning without performing key comparisons. This is allowed
-//    because all latches from this point forward will have end keys that are
-//    greater than the search range's start key.
-// 6. once the scan reaches the upper bound constraint position, it terminates.
-//    It does so because the latch at this position is the first latch with a
-//    start key larger than the search range's end key.
+//  1. before tranversing the tree, the scan performs a binary search on the
+//     root node's items to determine a "soft" lower-bound constraint position
+//     and a "hard" upper-bound constraint position in the root's children.
+//  2. when tranversing into a child node in the lower or upper bound constraint
+//     position, the constraint is refined by searching the child's items.
+//  3. the initial traversal down the tree follows the left-most children
+//     whose upper bound end keys are equal to or greater than the start key
+//     of the search range. The children followed will be equal to or less
+//     than the soft lower bound constraint.
+//  4. once the initial tranversal completes and the scan is in the left-most
+//     abstract node whose upper bound overlaps the search range, key comparisons
+//     must be performed with each latch in the tree. This is necessary because
+//     any of these latches may have end keys that cause them to overlap with the
+//     search range.
+//  5. once the scan reaches the lower bound constraint position (the first latch
+//     with a start key equal to or greater than the search range's start key),
+//     it can begin scaning without performing key comparisons. This is allowed
+//     because all latches from this point forward will have end keys that are
+//     greater than the search range's start key.
+//  6. once the scan reaches the upper bound constraint position, it terminates.
+//     It does so because the latch at this position is the first latch with a
+//     start key larger than the search range's end key.
 type overlapScan[I, K, V any] struct {
 	bounds I
 	set    bool

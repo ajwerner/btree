@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/ajwerner/btree/internal/abstract"
-	"github.com/stretchr/testify/require"
 )
 
 type Key []byte
@@ -207,7 +206,7 @@ func TestBTree(t *testing.T) {
 	const count = 768
 
 	// Add keys in sorted order.
-	for i := 0; i < count; i++ {
+	for i := range count {
 		tr.Upsert(newLatch(span(i)), struct{}{})
 		//tr.Verify(t)
 		if e := i + 1; e != tr.Len() {
@@ -217,7 +216,7 @@ func TestBTree(t *testing.T) {
 	}
 
 	// Delete keys in sorted order.
-	for i := 0; i < count; i++ {
+	for i := range count {
 		tr.Delete(newLatch(span(i)))
 		//tr.Verify(t)
 		if e := count - (i + 1); e != tr.Len() {
@@ -227,7 +226,7 @@ func TestBTree(t *testing.T) {
 	}
 
 	// Add keys in reverse sorted order.
-	for i := 0; i < count; i++ {
+	for i := range count {
 		tr.Upsert(newLatch(span(count-i)), struct{}{})
 		//tr.Verify(t)
 		if e := i + 1; e != tr.Len() {
@@ -237,7 +236,7 @@ func TestBTree(t *testing.T) {
 	}
 
 	// Delete keys in reverse sorted order.
-	for i := 0; i < count; i++ {
+	for i := range count {
 		tr.Delete(newLatch(span(count - i)))
 		//tr.Verify(t)
 		if e := count - (i + 1); e != tr.Len() {
@@ -251,12 +250,12 @@ func TestBTreeSeek(t *testing.T) {
 	const count = 513
 
 	tr := makeBTree()
-	for i := 0; i < count; i++ {
+	for i := range count {
 		tr.Upsert(newLatch(span(i*2)), struct{}{})
 	}
 
 	it := tr.Iterator()
-	for i := 0; i < 2*count-1; i++ {
+	for i := range 2*count - 1 {
 		it.SeekGE(newLatch(span(i)))
 		if !it.Valid() {
 			t.Fatalf("%d: expected valid iterator", i)
@@ -294,15 +293,15 @@ func TestBTreeSeekOverlap(t *testing.T) {
 	const size = 2 * abstract.MaxEntries
 
 	tr := makeBTree()
-	for i := 0; i < count; i++ {
+	for i := range count {
 		tr.Upsert(newLatch(spanWithEnd(i, i+size+1)), struct{}{})
 	}
 
 	// Iterate over overlaps with a point scan.
 	it := tr.Iterator()
-	for i := 0; i < count+size; i++ {
+	for i := range count + size {
 		it.FirstOverlap(newLatch(spanWithEnd(i, i)))
-		for j := 0; j < size+1; j++ {
+		for j := range size + 1 {
 			expStart := i - size + j
 			if expStart < 0 {
 				continue
@@ -333,9 +332,9 @@ func TestBTreeSeekOverlap(t *testing.T) {
 
 	// Iterate over overlaps with a range scan.
 	it = tr.Iterator()
-	for i := 0; i < count+size; i++ {
+	for i := range count + size {
 		it.FirstOverlap(newLatch(spanWithEnd(i, i+size+1)))
-		for j := 0; j < 2*size+1; j++ {
+		for j := range 2*size + 1 {
 			expStart := i - size + j
 			if expStart < 0 {
 				continue
@@ -369,13 +368,13 @@ func TestBTreeSeekOverlapRandom(t *testing.T) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	const trials = 10
-	for i := 0; i < trials; i++ {
+	for range trials {
 		tr := makeBTree()
 
 		const count = 1000
 		latches := make([]*latch, count)
 		latchSpans := make([]int, count)
-		for j := 0; j < count; j++ {
+		for j := range count {
 			var la *latch
 			end := rng.Intn(count + 10)
 			if end <= j {
@@ -390,7 +389,7 @@ func TestBTreeSeekOverlapRandom(t *testing.T) {
 		}
 
 		const scanTrials = 100
-		for j := 0; j < scanTrials; j++ {
+		for range scanTrials {
 			var scanLa *latch
 			scanStart := rng.Intn(count)
 			scanEnd := rng.Intn(count + 10)
@@ -415,7 +414,9 @@ func TestBTreeSeekOverlapRandom(t *testing.T) {
 				it.NextOverlap()
 			}
 
-			require.Equal(t, len(exp), len(found), "search for %v", scanLa.span)
+			if len(exp) != len(found) {
+				t.Fatalf("search for %v: expected %d results, found %d", scanLa.span, len(exp), len(found))
+			}
 		}
 	}
 }
@@ -468,13 +469,11 @@ func TestBTreeCloneConcurrentOperations(t *testing.T) {
 	toRemove := want[cloneTestSize/2:]
 	for i := 0; i < len(trees)/2; i++ {
 		tree := trees[i]
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			for _, la := range toRemove {
 				tree.Delete(la)
 			}
-			wg.Done()
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -640,7 +639,7 @@ func BenchmarkBTreeIterSeekGE(b *testing.B) {
 		var spans []Span
 		tr := makeBTree()
 
-		for i := 0; i < count; i++ {
+		for i := range count {
 			s := span(i)
 			spans = append(spans, s)
 			tr.Upsert(newLatch(s), struct{}{})
@@ -672,7 +671,7 @@ func BenchmarkBTreeIterSeekLT(b *testing.B) {
 		var spans []Span
 		tr := makeBTree()
 
-		for i := 0; i < count; i++ {
+		for i := range count {
 			s := span(i)
 			spans = append(spans, s)
 			tr.Upsert(newLatch(s), struct{}{})
@@ -713,7 +712,7 @@ func BenchmarkBTreeIterFirstOverlap(b *testing.B) {
 		var latches []*latch
 		tr := makeBTree()
 
-		for i := 0; i < count; i++ {
+		for i := range count {
 			s := spanWithEnd(i, i+1)
 			spans = append(spans, s)
 			la := newLatch(s)
@@ -747,7 +746,7 @@ func BenchmarkBTreeIterNext(b *testing.B) {
 
 	const count = 8 << 10
 	const size = 2 * abstract.MaxEntries
-	for i := 0; i < count; i++ {
+	for i := range count {
 		la := newLatch(spanWithEnd(i, i+size+1))
 		tr.Upsert(la, struct{}{})
 	}
@@ -767,7 +766,7 @@ func BenchmarkBTreeIterPrev(b *testing.B) {
 
 	const count = 8 << 10
 	const size = 2 * abstract.MaxEntries
-	for i := 0; i < count; i++ {
+	for i := range count {
 		la := newLatch(spanWithEnd(i, i+size+1))
 		tr.Upsert(la, struct{}{})
 	}
@@ -787,7 +786,7 @@ func BenchmarkBTreeIterNextOverlap(b *testing.B) {
 
 	const count = 8 << 10
 	const size = 2 * abstract.MaxEntries
-	for i := 0; i < count; i++ {
+	for i := range count {
 		la := newLatch(spanWithEnd(i, i+size+1))
 		tr.Upsert(la, struct{}{})
 	}
@@ -809,7 +808,7 @@ func BenchmarkBTreeIterOverlapScan(b *testing.B) {
 
 	const count = 8 << 10
 	const size = 2 * abstract.MaxEntries
-	for i := 0; i < count; i++ {
+	for i := range count {
 		tr.Upsert(newLatch(spanWithEnd(i, i+size+1)), struct{}{})
 	}
 
