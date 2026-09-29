@@ -720,15 +720,12 @@ func BenchmarkBTreeIterSeekLT(b *testing.B) {
 func BenchmarkBTreeIterFirstOverlap(b *testing.B) {
 	forBenchmarkSizes(b, func(b *testing.B, count int) {
 		var spans []keySpan
-		var latches []*latch
 		tr := makeBTree()
 
 		for i := range count {
 			s := spanWithEnd(i, i+1)
 			spans = append(spans, s)
-			la := newLatch(s)
-			latches = append(latches, la)
-			tr.Upsert(la, struct{}{})
+			tr.Upsert(newLatch(s), struct{}{})
 		}
 
 		rng := newRNG(b)
