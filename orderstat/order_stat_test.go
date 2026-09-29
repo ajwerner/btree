@@ -168,8 +168,25 @@ func testRankAndSeekNth(t *testing.T, degree int) {
 				if r := it.Rank(); r != idx+1 {
 					t.Fatalf("n=%d h=%d: Rank after Next from %d = %d", n, height, idx, r)
 				}
-			} else if it.Rank() != -1 {
-				t.Fatalf("n=%d h=%d: Rank past end = %d", n, height, it.Rank())
+			} else if it.Rank() != n {
+				t.Fatalf("n=%d h=%d: Rank past end = %d, want %d", n, height, it.Rank(), n)
+			}
+			if r, found := s.Rank(keys[idx]); r != idx || !found {
+				t.Fatalf("n=%d h=%d: Map.Rank(%d) = %d %v", n, height, keys[idx], r, found)
+			}
+			if r, found := s.Rank(keys[idx] + 1); r != idx+1 || found {
+				t.Fatalf("n=%d h=%d: Map.Rank(%d) = %d %v, want %d", n, height, keys[idx]+1, r, found, idx+1)
+			}
+			if r, found := s.Rank(keys[idx] - 1); r != idx || found {
+				t.Fatalf("n=%d h=%d: Map.Rank(%d) = %d %v, want %d", n, height, keys[idx]-1, r, found, idx)
+			}
+			if got, ok := s.Nth(idx); !ok || got != keys[idx] {
+				t.Fatalf("n=%d h=%d: Nth(%d) = %d %v", n, height, idx, got, ok)
+			}
+			if j := rng.IntN(n + 1); j >= idx {
+				if c := s.Count(keys[idx], keys[idx]+3*(j-idx)); c != j-idx {
+					t.Fatalf("n=%d h=%d: Count(%d, %d) = %d, want %d", n, height, idx, j, c, j-idx)
+				}
 			}
 		}
 		if n >= 20000 && height < 3 {

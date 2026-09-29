@@ -44,11 +44,11 @@ type Updater[K, V, A any] interface {
 	// using the data in the UpdateInfo to optimize the update. If the
 	// augmentation changed, and thus, changes should occur in the ancestors
 	// of the subtree rooted at this node, return true.
-	Update(*Node[K, V, A], UpdateInfo[K, A]) (changed bool)
+	Update(*Node[K, V, A], UpdateInfo[K, V, A]) (changed bool)
 }
 
 // UpdateInfo is used to describe the update operation.
-type UpdateInfo[K, A any] struct {
+type UpdateInfo[K, V, A any] struct {
 
 	// Action indicates the semantics of the below fields. If Default, no
 	// fields will be populated.
@@ -59,8 +59,16 @@ type UpdateInfo[K, A any] struct {
 	// right-hand-side after a split.
 	ModifiedOther *A
 
-	// RelevantKey will be populated in all non-Default events.
-	RelevantKey K
+	// RelevantKey and RelevantValue are the entry that was inserted,
+	// removed or moved into the parent (Split), or the new entry for a
+	// Replacement. They are populated in all non-Default events.
+	RelevantKey   K
+	RelevantValue V
+
+	// PrevKey and PrevValue are the entry that was replaced. They are
+	// populated only for Replacement.
+	PrevKey   K
+	PrevValue V
 }
 
 // Action is used to classify the type of Update in order to permit various
@@ -89,6 +97,11 @@ const (
 	// is populated, it indicates a rebalance which caused the subtree with
 	// that augmentation to also be added.
 	Insertion
+
+	// Replacement indicates that an entry in the subtree rooted at this
+	// node was replaced by another with an equal key. RelevantKey and
+	// RelevantValue are the new entry; PrevKey and PrevValue the old.
+	Replacement
 )
 
 // Compare compares two values using the same comparison function as the Map.
@@ -96,6 +109,8 @@ func (c *Config[K, V, A]) Compare(a, b K) int { return c.cmp(a, b) }
 
 type config[K, V, A any] struct {
 	Config[K, V, A]
+	monoid     Monoid[K, V, A] // set when Updater came from MonoidUpdater
+	folder     Folder[K, V, A] // set when the monoid implements Folder
 	fl         FreeList[K, V, A]
 	maxEntries int
 	minEntries int
@@ -151,8 +166,16 @@ func makeConfig[K, V, A any](
 	} else {
 		fl = NewFreeList[K, V, A](DefaultFreeListSize)
 	}
+	var m Monoid[K, V, A]
+	var f Folder[K, V, A]
+	if mu, ok := up.(interface{ monoid() Monoid[K, V, A] }); ok {
+		m = mu.monoid()
+		f, _ = m.(Folder[K, V, A])
+	}
 	return config[K, V, A]{
 		Config:     Config[K, V, A]{Updater: up, cmp: cmp},
+		monoid:     m,
+		folder:     f,
 		fl:         fl,
 		maxEntries: 2*o.degree - 1,
 		minEntries: o.degree - 1,

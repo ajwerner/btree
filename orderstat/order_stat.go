@@ -1,4 +1,4 @@
-// Copyright 2021 Andrew Werner.
+// Copyright 2026 Andrew Werner.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,26 +12,25 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-// Package orderstat provides copy-on-write ordered maps and sets whose
-// iterators additionally support rank queries and seeking by rank.
+// Package orderstat provides copy-on-write ordered maps and sets with
+// order-statistic queries: the rank of a key, the entry at a rank, and the
+// number of entries in a key range, each in O(log n).
 package orderstat
 
 import (
-	"fmt"
-
 	"github.com/ajwerner/btree/aug"
 )
 
-// Map is an ordered map from K to V which additionally offers the methods
-// of an order-statistic tree on its iterator.
+// Map is an ordered map from K to V which additionally offers rank
+// queries. Its augmentation is the number of entries in each subtree.
 type Map[K, V any] struct {
-	*aug.Map[K, V, stat]
+	*aug.Map[K, V, int]
 }
 
 // New constructs a Map with the provided comparison function. See
 // aug.WithDegree and aug.WithFreeList for the options.
 func New[K, V any](cmp func(K, K) int, opts ...aug.Option) *Map[K, V] {
-	return &Map[K, V]{Map: aug.New[K, V, stat](cmp, updater[K, V]{}, opts...)}
+	return &Map[K, V]{Map: aug.New[K, V, int](cmp, aug.MonoidUpdater[K, V, int](aug.Count[K, V]{}), opts...)}
 }
 
 // Iterator constructs a new Iterator for this Map.
@@ -44,8 +43,30 @@ func (t *Map[K, V]) Clone() *Map[K, V] {
 	return &Map[K, V]{Map: t.Map.Clone()}
 }
 
-// Set is an ordered set with items of type T which additionally offers the
-// methods of an order-statistic tree on its iterator.
+// Rank returns the number of entries with keys less than k, and whether an
+// entry with key k exists. When it does not, the rank is the position at
+// which it would be inserted.
+func (t *Map[K, V]) Rank(k K) (rank int, found bool) {
+	return t.Map.Prefix(k)
+}
+
+// Count returns the number of entries with keys in [lo, hi).
+func (t *Map[K, V]) Count(lo, hi K) int {
+	return t.Map.Aggregate(lo, hi)
+}
+
+// Nth returns the entry with rank n, i.e. with exactly n entries before it.
+func (t *Map[K, V]) Nth(n int) (k K, v V, ok bool) {
+	it := t.Iterator()
+	it.SeekNth(n)
+	if !it.Valid() {
+		return k, v, false
+	}
+	return it.Cur(), it.Value(), true
+}
+
+// Set is an ordered set with items of type T which additionally offers rank
+// queries.
 type Set[T any] Map[T, struct{}]
 
 // NewSet constructs a Set with the provided comparison function. See
@@ -84,135 +105,55 @@ func (t *Set[T]) Iterator() Iterator[T, struct{}] {
 	return (*Map[T, struct{}])(t).Iterator()
 }
 
+// Rank returns the number of items less than item, and whether item is in
+// the set.
+func (t *Set[T]) Rank(item T) (rank int, found bool) {
+	return t.Map.Prefix(item)
+}
+
+// Count returns the number of items in [lo, hi).
+func (t *Set[T]) Count(lo, hi T) int {
+	return t.Map.Aggregate(lo, hi)
+}
+
+// Nth returns the item with rank n.
+func (t *Set[T]) Nth(n int) (item T, ok bool) {
+	item, _, ok = (*Map[T, struct{}])(t).Nth(n)
+	return item, ok
+}
+
 // FreeList recycles nodes between orderstat Maps and Sets with the same key
 // and value types.
-type FreeList[K, V any] = aug.FreeList[K, V, stat]
+type FreeList[K, V any] = aug.FreeList[K, V, int]
 
 // NewFreeList returns a FreeList that retains up to size nodes. See
 // aug.NewFreeList.
 func NewFreeList[K, V any](size int) FreeList[K, V] {
-	return aug.NewFreeList[K, V, stat](size)
-}
-
-// stat is the augmentation: the number of items in the subtree.
-type stat struct {
-	count int
-}
-
-type updater[K, V any] struct{}
-
-func (u updater[K, V]) Update(
-	n *aug.Node[K, V, stat],
-	md aug.UpdateInfo[K, stat],
-) (updated bool) {
-	a := n.GetA()
-	switch md.Action {
-	case aug.Removal, aug.Split:
-		a.count--
-		if md.ModifiedOther != nil {
-			a.count -= md.ModifiedOther.count
-		}
-		return true
-	case aug.Insertion:
-		a.count++
-		if md.ModifiedOther != nil {
-			a.count += md.ModifiedOther.count
-		}
-		return true
-	case aug.Default:
-		orig := a.count
-		var count int
-		if !n.IsLeaf() {
-			for i := int16(0); i <= n.Count(); i++ {
-				count += n.GetChild(i).count
-			}
-		}
-		count += int(n.Count())
-		a.count = count
-		return a.count != orig
-	default:
-		panic(fmt.Errorf("unknown action %v", md.Action))
-	}
+	return aug.NewFreeList[K, V, int](size)
 }
 
 // Iterator allows iteration through the collection. It offers all the usual
-// iterator methods, plus it offers Rank() and SeekNth() which allow efficient
-// rank operations.
+// iterator methods, plus Rank and SeekNth.
 type Iterator[K, V any] struct {
-	aug.Iterator[K, V, stat]
+	aug.Iterator[K, V, int]
 }
 
-// Rank returns the rank of the current iterator position, i.e. the number
-// of items in the collection which are less than the current item. If the
-// iterator is not valid, -1 is returned.
+// Rank returns the number of entries before the iterator's position. If the
+// iterator is past the end that is the length of the collection; if it is
+// before the beginning it is 0.
 func (it *Iterator[K, V]) Rank() int {
-	if !it.Valid() {
-		return -1
-	}
-	ll := lowLevel(it)
-	// Every ancestor frame contributes the keys and the subtrees to the
-	// left of the child through which we descended.
-	var before int
-	for d, depth := 0, ll.Depth(); d < depth; d++ {
-		n, pos := ll.Frame(d)
-		for i := int16(0); i < pos; i++ {
-			before += n.GetChild(i).count
-		}
-		before += int(pos)
-	}
-	// The current node contributes the keys to the left of the position and,
-	// if it is not a leaf, the subtrees up to and including the one at the
-	// position (which holds keys less than the key at the position).
-	n, pos := ll.Node(), ll.Pos()
-	if !n.IsLeaf() {
-		for i := int16(0); i <= pos; i++ {
-			before += n.GetChild(i).count
-		}
-	}
-	before += int(pos)
-	return before
+	return it.Prefix()
 }
 
-// SeekNth seeks the iterator to the nth item in the collection (0-indexed).
-// If nth is out of range the iterator is left invalid.
+// SeekNth seeks the iterator to the entry with rank nth, i.e. with exactly
+// nth entries before it. If nth is out of range the iterator is left
+// invalid.
 func (it *Iterator[K, V]) SeekNth(nth int) {
-	it.Reset()
-	ll := lowLevel(it)
-	if ll.Node() == nil || nth < 0 || nth >= ll.Node().GetA().count {
+	if nth < 0 {
+		it.Reset()
 		return
 	}
-	// Reset leaves the iterator at position -1 in the root. IncrementPos
-	// moves it to the first child and item.
-	ll.IncrementPos()
-	n := 0
-	for n <= nth {
-		if ll.IsLeaf() {
-			// If we're in the leaf, then, by construction, we can find
-			// the relevant position and seek to it in constant time.
-			ll.SetPos(int16(nth - n))
-			return
-		}
-		a := ll.Child()
-		if n+a.count > nth {
-			ll.Descend()
-			continue
-		}
-		n += a.count
-		switch {
-		case n < nth:
-			// Consume the current value, move on to the next one.
-			n++
-			ll.IncrementPos()
-		case n == nth:
-			return // found it
-		default:
-			panic("orderstat: invariant violated")
-		}
-	}
-}
-
-func lowLevel[K, V any](
-	it *Iterator[K, V],
-) *aug.LowLevelIterator[K, V, stat] {
-	return aug.LowLevel(&it.Iterator)
+	it.SeekWhere(func(prefix, contribution int) bool {
+		return prefix+contribution > nth
+	})
 }

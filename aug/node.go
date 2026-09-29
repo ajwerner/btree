@@ -325,22 +325,18 @@ func (n *Node[K, V, A]) split(c *config[K, V, A], i int) (K, V, *Node[K, V, A]) 
 		n.children = n.children[:i+1]
 	}
 	next.update(&c.Config)
-	n.updateOn(&c.Config, Split, out.k, next)
+	n.updateOn(&c.Config, Split, out.k, out.v, next)
 	return out.k, out.v, next
 }
 
 func (n *Node[K, V, A]) update(cfg *Config[K, V, A]) bool {
-	return n.updateWithMeta(cfg, UpdateInfo[K, A]{})
-}
-
-func (n *Node[K, V, A]) updateWithMeta(cfg *Config[K, V, A], md UpdateInfo[K, A]) bool {
 	if cfg.Updater == nil {
 		return false
 	}
-	return cfg.Updater.Update(n, md)
+	return cfg.Updater.Update(n, UpdateInfo[K, V, A]{})
 }
 
-func (n *Node[K, V, A]) updateOn(cfg *Config[K, V, A], action Action, k K, affected *Node[K, V, A]) bool {
+func (n *Node[K, V, A]) updateOn(cfg *Config[K, V, A], action Action, k K, v V, affected *Node[K, V, A]) bool {
 	if cfg.Updater == nil {
 		return false
 	}
@@ -348,10 +344,24 @@ func (n *Node[K, V, A]) updateOn(cfg *Config[K, V, A], action Action, k K, affec
 	if affected != nil {
 		a = &affected.aug
 	}
-	return n.updateWithMeta(cfg, UpdateInfo[K, A]{
+	return cfg.Updater.Update(n, UpdateInfo[K, V, A]{
 		Action:        action,
 		RelevantKey:   k,
+		RelevantValue: v,
 		ModifiedOther: a,
+	})
+}
+
+func (n *Node[K, V, A]) updateOnReplace(cfg *Config[K, V, A], k K, v V, prevK K, prevV V) bool {
+	if cfg.Updater == nil {
+		return false
+	}
+	return cfg.Updater.Update(n, UpdateInfo[K, V, A]{
+		Action:        Replacement,
+		RelevantKey:   k,
+		RelevantValue: v,
+		PrevKey:       prevK,
+		PrevValue:     prevV,
 	})
 }
 
@@ -362,14 +372,11 @@ func (n *Node[K, V, A]) updateOn(cfg *Config[K, V, A], action Action, k K, affec
 func (n *Node[K, V, A]) insert(c *config[K, V, A], item K, value V) (replacedK K, replacedV V, replaced, changed bool) {
 	i, found := n.find(c.cmp, item)
 	if found {
-		e := &n.entries[i]
-		replacedK, replacedV = e.k, e.v
-		e.k, e.v = item, value
-		return replacedK, replacedV, true, false
+		return n.replaceAt(c, i, item, value)
 	}
 	if n.IsLeaf() {
 		n.insertAt(i, item, value, nil)
-		return replacedK, replacedV, false, n.updateOn(&c.Config, Insertion, item, nil)
+		return replacedK, replacedV, false, n.updateOn(&c.Config, Insertion, item, value, nil)
 	}
 	if len(n.children[i].entries) >= c.maxEntries {
 		splitK, splitV, splitNode := mut(c, &n.children[i]).split(c, c.maxEntries/2)
@@ -379,18 +386,27 @@ func (n *Node[K, V, A]) insert(c *config[K, V, A], item K, value V) (replacedK K
 		} else if cmp > 0 {
 			i++ // we want second split node
 		} else {
-			e := &n.entries[i]
-			replacedK, replacedV = e.k, e.v
-			e.k, e.v = item, value
-			return replacedK, replacedV, true, false
+			return n.replaceAt(c, i, item, value)
 		}
 	}
 	replacedK, replacedV, replaced, changed =
 		mut(c, &n.children[i]).insert(c, item, value)
 	if changed {
-		changed = n.updateOn(&c.Config, Insertion, item, nil)
+		if replaced {
+			changed = n.updateOnReplace(&c.Config, item, value, replacedK, replacedV)
+		} else {
+			changed = n.updateOn(&c.Config, Insertion, item, value, nil)
+		}
 	}
 	return replacedK, replacedV, replaced, changed
+}
+
+// replaceAt replaces the entry at index i, which has a key equal to item.
+func (n *Node[K, V, A]) replaceAt(c *config[K, V, A], i int, item K, value V) (replacedK K, replacedV V, replaced, changed bool) {
+	e := &n.entries[i]
+	replacedK, replacedV = e.k, e.v
+	e.k, e.v = item, value
+	return replacedK, replacedV, true, n.updateOnReplace(&c.Config, item, value, replacedK, replacedV)
 }
 
 // removeMax removes and returns the maximum item from the subtree rooted at
@@ -398,7 +414,7 @@ func (n *Node[K, V, A]) insert(c *config[K, V, A], item K, value V) (replacedK K
 func (n *Node[K, V, A]) removeMax(c *config[K, V, A]) (K, V) {
 	if n.IsLeaf() {
 		outK, outV, _ := n.popBack()
-		n.updateOn(&c.Config, Removal, outK, nil)
+		n.updateOn(&c.Config, Removal, outK, outV, nil)
 		return outK, outV
 	}
 	// Recurse into max child.
@@ -410,7 +426,7 @@ func (n *Node[K, V, A]) removeMax(c *config[K, V, A]) (K, V) {
 	}
 	child := mut(c, &n.children[i])
 	outK, outV := child.removeMax(c)
-	n.updateOn(&c.Config, Removal, outK, nil)
+	n.updateOn(&c.Config, Removal, outK, outV, nil)
 	return outK, outV
 }
 
@@ -454,8 +470,8 @@ func (n *Node[K, V, A]) rebalanceOrMerge(c *config[K, V, A], i int) {
 		yK, yV := y.k, y.v
 		child.pushFront(yK, yV, grandChild)
 		y.k, y.v = xK, xV
-		left.updateOn(&c.Config, Removal, xK, grandChild)
-		child.updateOn(&c.Config, Insertion, yK, grandChild)
+		left.updateOn(&c.Config, Removal, xK, xV, grandChild)
+		child.updateOn(&c.Config, Insertion, yK, yV, grandChild)
 
 	case i < len(n.entries) && len(n.children[i+1].entries) > c.minEntries:
 		// Rebalance from right sibling.
@@ -493,8 +509,8 @@ func (n *Node[K, V, A]) rebalanceOrMerge(c *config[K, V, A], i int) {
 		yK, yV := y.k, y.v
 		child.pushBack(yK, yV, grandChild)
 		y.k, y.v = xK, xV
-		right.updateOn(&c.Config, Removal, xK, grandChild)
-		child.updateOn(&c.Config, Insertion, yK, grandChild)
+		right.updateOn(&c.Config, Removal, xK, xV, grandChild)
+		child.updateOn(&c.Config, Insertion, yK, yV, grandChild)
 
 	default:
 		// Merge with either the left or right sibling.
@@ -529,7 +545,7 @@ func (n *Node[K, V, A]) rebalanceOrMerge(c *config[K, V, A], i int) {
 		if !child.IsLeaf() {
 			child.children = append(child.children, mergeChild.children...)
 		}
-		child.updateOn(&c.Config, Insertion, mergeK, mergeChild)
+		child.updateOn(&c.Config, Insertion, mergeK, mergeV, mergeChild)
 		if atomic.LoadInt32(&mergeChild.ref) == 1 {
 			// We own mergeChild exclusively, so its references to its
 			// children transfer to child. Drop them from mergeChild so
@@ -559,7 +575,7 @@ func (n *Node[K, V, A]) remove(
 	if n.IsLeaf() {
 		if found {
 			outK, outV, _ = n.removeAt(i)
-			return outK, outV, true, n.updateOn(&c.Config, Removal, outK, nil)
+			return outK, outV, true, n.updateOn(&c.Config, Removal, outK, outV, nil)
 		}
 		return outK, outV, false, false
 	}
@@ -574,12 +590,12 @@ func (n *Node[K, V, A]) remove(
 		e := &n.entries[i]
 		outK, outV = e.k, e.v
 		e.k, e.v = child.removeMax(c)
-		return outK, outV, true, n.updateOn(&c.Config, Removal, outK, nil)
+		return outK, outV, true, n.updateOn(&c.Config, Removal, outK, outV, nil)
 	}
 	// Item is not in this node and child is large enough to remove from.
 	outK, outV, found, changed = child.remove(c, item)
 	if changed {
-		changed = n.updateOn(&c.Config, Removal, outK, nil)
+		changed = n.updateOn(&c.Config, Removal, outK, outV, nil)
 	}
 	return outK, outV, found, changed
 }

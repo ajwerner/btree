@@ -113,7 +113,7 @@ func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, h
 	}
 	if v.cfg.Updater != nil {
 		saved := n.aug
-		v.cfg.Updater.Update(n, UpdateInfo[K, A]{})
+		v.cfg.Updater.Update(n, UpdateInfo[K, V, A]{})
 		recomputed := n.aug
 		n.aug = saved
 		if !reflect.DeepEqual(saved, recomputed) {

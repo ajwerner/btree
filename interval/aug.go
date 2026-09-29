@@ -29,7 +29,7 @@ type updater[I, K, V any] struct {
 
 func (u *updater[I, K, V]) Update(
 	n *aug.Node[I, V, subtreeBound[K]],
-	md aug.UpdateInfo[I, subtreeBound[K]],
+	md aug.UpdateInfo[I, V, subtreeBound[K]],
 ) (updated bool) {
 	a := n.GetA()
 	switch md.Action {
@@ -63,7 +63,7 @@ func (u *updater[I, K, V]) Update(
 			return false
 		}
 		fallthrough
-	case aug.Default:
+	case aug.Default, aug.Replacement:
 		prev := a.keyBound
 		a.keyBound = u.findUpperBound(n)
 		return a.compare(u.cmp, prev) != 0
