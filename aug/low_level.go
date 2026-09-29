@@ -1,12 +1,11 @@
-package abstract
+package aug
 
-// LowLevelIterator is exposed to developers within this module for use
-// implemented augmented search functionality.
+// LowLevelIterator exposes the structure of the tree to augmentation code
+// implementing custom search operations.
 type LowLevelIterator[K, V, A any] Iterator[K, V, A]
 
-// LowLevel converts an iterator to a LowLevelIterator. Given this package
-// is internal, callers outside of this module cannot construct a
-// LowLevelIterator.
+// LowLevel converts an iterator to a LowLevelIterator. The two share state:
+// operations on either are visible through the other.
 func LowLevel[K, V, A any](
 	it *Iterator[K, V, A],
 ) *LowLevelIterator[K, V, A] {
@@ -49,10 +48,19 @@ func (i *LowLevelIterator[K, V, A]) Depth() int {
 	return i.s.len()
 }
 
-// Child returns the augmentation of the child node at the current position.
+// Frame returns the node and position of the ancestor frame at depth d,
+// where 0 is the root frame and Depth()-1 is the parent of the current
+// node. The position is the index of the child through which the iterator
+// descended. It is illegal to call with d outside [0, Depth()).
+func (i *LowLevelIterator[K, V, A]) Frame(d int) (*Node[K, V, A], int16) {
+	f := i.s.at(d)
+	return f.node, f.pos
+}
+
+// ChildAug returns the augmentation of the child node at the current position.
 // It is illegal to call if this is a leaf node or there is no child
 // node at the current position.
-func (i *LowLevelIterator[K, V, A]) Child() *A {
+func (i *LowLevelIterator[K, V, A]) ChildAug() *A {
 	return &i.node.children[i.pos].aug
 }
 

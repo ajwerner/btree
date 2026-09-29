@@ -12,96 +12,288 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
+// Package interval provides copy-on-write ordered maps and sets of
+// intervals whose iterators find every interval overlapping a query in
+// O(log n + k).
 package interval
 
-import "github.com/ajwerner/btree/internal/abstract"
+import (
+	"iter"
 
-// Map is a ordered map from I to V where I is an interval. Its iterator
-// provides efficient overlap queries.
-type Map[I, K, V any] struct {
-	abstract.Map[I, V, aug[K]]
+	"github.com/ajwerner/btree/aug"
+)
+
+// Map is an ordered map from I to V where I is an interval. Its iterator
+// provides efficient overlap queries. It is an aug.Map whose augmentation
+// is the upper bound of each subtree; the conversion between the two is
+// free.
+type Map[I, K, V any] aug.Map[I, V, subtreeBound[K]]
+
+// Bounds describes how to read intervals of type I whose bounds have type
+// K. Compare, Key and End are required.
+type Bounds[I, K any] struct {
+
+	// Compare orders bound keys.
+	Compare func(K, K) int
+
+	// Key returns the inclusive start of an interval.
+	Key func(I) K
+
+	// End returns the exclusive end of an interval. An interval without an
+	// end (see HasEnd) is a point containing only its Key.
+	End func(I) K
+
+	// HasEnd reports whether an interval has an end. It is optional: by
+	// default an interval whose End is the zero K has none.
+	HasEnd func(I) bool
+
+	// CompareIntervals orders intervals and so defines which intervals a
+	// Map treats as the same key. It is optional: by default intervals are
+	// ordered by Key, then points before ranges, then by End.
+	CompareIntervals func(I, I) int
 }
 
-type config[I, K any] struct {
-	getKey, getEndKey func(I) K
-	cmp               func(K, K) int
+// Interval is implemented by interval types that expose their own bounds:
+// Key is the inclusive start and End the exclusive end.
+type Interval[K any] interface {
+	Key() K
+	End() K
 }
 
-// MakeMap constructs a new map with the provided comparison functions
-// for intervals and for their bounds.
-func MakeMap[I, K, V any](
-	cmpK Cmp[K],
-	cmpI Cmp[I],
-	key, endKey func(I) K,
-	hasEnd func(I) bool,
-) Map[I, K, V] {
-	if hasEnd == nil {
-		hasEnd = func(i I) bool {
-			return !isZero(cmpK, endKey(i))
+// BoundsOf returns Bounds for an interval type that exposes its own bounds,
+// with the default HasEnd and CompareIntervals. The interval type is given
+// explicitly and K is inferred: BoundsOf[span](cmp.Compare[int]).
+func BoundsOf[I Interval[K], K any](compare func(K, K) int) Bounds[I, K] {
+	return Bounds[I, K]{
+		Compare: compare,
+		Key:     I.Key,
+		End:     I.End,
+	}
+}
+
+func (b Bounds[I, K]) withDefaults() Bounds[I, K] {
+	if b.Compare == nil || b.Key == nil || b.End == nil {
+		panic("interval: Bounds.Compare, Key and End are required")
+	}
+	if b.HasEnd == nil {
+		b.HasEnd = func(i I) bool {
+			var zero K
+			return b.Compare(b.End(i), zero) != 0
 		}
 	}
-	return Map[I, K, V]{
-		Map: abstract.MakeMap[I, V, aug[K]](
-			cmpI,
-			&updater[I, K, V]{
-				cmp:    cmpK,
-				key:    key,
-				end:    endKey,
-				hasEnd: hasEnd,
-			},
-		),
+	if b.CompareIntervals == nil {
+		b.CompareIntervals = func(x, y I) int {
+			if c := b.Compare(b.Key(x), b.Key(y)); c != 0 {
+				return c
+			}
+			xEnd, yEnd := b.HasEnd(x), b.HasEnd(y)
+			switch {
+			case xEnd && yEnd:
+				return b.Compare(b.End(x), b.End(y))
+			case xEnd:
+				return 1
+			case yEnd:
+				return -1
+			default:
+				return 0
+			}
+		}
+	}
+	return b
+}
+
+// New constructs a Map over intervals described by b. See aug.WithDegree
+// and aug.WithFreeList for the options.
+func New[I, K, V any](b Bounds[I, K], opts ...aug.Option) *Map[I, K, V] {
+	b = b.withDefaults()
+	return (*Map[I, K, V])(aug.New[I, V, subtreeBound[K]](
+		b.CompareIntervals,
+		&updater[I, K, V]{
+			cmp:    b.Compare,
+			key:    b.Key,
+			end:    b.End,
+			hasEnd: b.HasEnd,
+		},
+		opts...,
+	))
+}
+
+func (m *Map[I, K, V]) a() *aug.Map[I, V, subtreeBound[K]] {
+	return (*aug.Map[I, V, subtreeBound[K]])(m)
+}
+
+// Overlapping returns an iterator over the entries whose intervals overlap
+// bounds, in order of their start keys.
+func (m *Map[I, K, V]) Overlapping(bounds I) iter.Seq2[I, V] {
+	return func(yield func(I, V) bool) {
+		it := m.Iterator()
+		for it.FirstOverlap(bounds); it.Valid(); it.NextOverlap() {
+			if !yield(it.Key(), it.Value()) {
+				return
+			}
+		}
 	}
 }
 
-// Clone clones the Map, lazily. It does so in constant time.
-func (m *Map[I, K, V]) Clone() Map[I, K, V] {
-	return Map[I, K, V]{Map: m.Map.Clone()}
+// Clear removes all entries, returning nodes no other map references to
+// the free list. See aug.Map.Clear.
+func (m *Map[I, K, V]) Clear() { m.a().Clear() }
+
+// Clone clones the map, lazily. It does so in constant time.
+func (m *Map[I, K, V]) Clone() *Map[I, K, V] { return (*Map[I, K, V])(m.a().Clone()) }
+
+// Delete removes the entry with key k, returning it.
+func (m *Map[I, K, V]) Delete(k I) (removedK I, v V, found bool) { return m.a().Delete(k) }
+
+// Upsert inserts or replaces the entry with key k, returning any replaced
+// entry.
+func (m *Map[I, K, V]) Upsert(k I, v V) (replacedK I, replacedV V, replaced bool) {
+	return m.a().Upsert(k, v)
 }
 
-// Cmp is a comparison function for type T.
-type Cmp[T any] func(T, T) int
+// Get returns the value for k, if any.
+func (m *Map[I, K, V]) Get(k I) (v V, ok bool) { return m.a().Get(k) }
 
-// Iterator constructs a new Iterator for the Map.
-func (t *Map[I, K, V]) Iterator() Iterator[I, K, V] {
-	return Iterator[I, K, V]{
-		Iterator: t.Map.Iterator(),
-	}
+// Len returns the number of entries.
+func (m *Map[I, K, V]) Len() int { return m.a().Len() }
+
+// Height returns the height of the tree.
+func (m *Map[I, K, V]) Height() int { return m.a().Height() }
+
+// Degree returns the degree of the tree.
+func (m *Map[I, K, V]) Degree() int { return m.a().Degree() }
+
+// Compare compares two keys with the map's comparison function.
+func (m *Map[I, K, V]) Compare(a, b I) int { return m.a().Compare(a, b) }
+
+// String renders the tree in a Newick-like format.
+func (m *Map[I, K, V]) String() string { return m.a().String() }
+
+// Verify checks the tree's invariants; see aug.Map.Verify.
+func (m *Map[I, K, V]) Verify() error { return m.a().Verify() }
+
+// Iterator returns a new iterator positioned before the first entry.
+func (m *Map[I, K, V]) Iterator() Iterator[I, K, V] {
+	return Iterator[I, K, V]{Iterator: m.a().Iterator()}
 }
 
-// Set is an ordered set with items of type T which additionally offers the
-// methods of an order-statistic tree on its iterator.
-type Set[I, T any] Map[I, T, struct{}]
+// Cursor returns a new cursor positioned before the first entry.
+func (m *Map[I, K, V]) Cursor() aug.Cursor[I, V, subtreeBound[K]] { return m.a().Cursor() }
 
-// MakeSet constructs a new Set with the provided comparison function.
-func MakeSet[I, T any](
-	cmpT Cmp[T],
-	cmpI Cmp[I],
-	key, endKey func(I) T,
-	hasEnd func(I) bool,
-) Set[I, T] {
-	return (Set[I, T])(MakeMap[I, T, struct{}](cmpT, cmpI, key, endKey, hasEnd))
+// All returns an iterator over every entry in key order.
+func (m *Map[I, K, V]) All() iter.Seq2[I, V] { return m.a().All() }
+
+// Backward returns an iterator over every entry in reverse key order.
+func (m *Map[I, K, V]) Backward() iter.Seq2[I, V] { return m.a().Backward() }
+
+// Range returns an iterator over the entries with keys in [lo, hi).
+func (m *Map[I, K, V]) Range(lo, hi I) iter.Seq2[I, V] { return m.a().Range(lo, hi) }
+
+// From returns an iterator over the entries with keys >= lo.
+func (m *Map[I, K, V]) From(lo I) iter.Seq2[I, V] { return m.a().From(lo) }
+
+// Min returns the entry with the smallest key.
+func (m *Map[I, K, V]) Min() (k I, v V, ok bool) { return m.a().Min() }
+
+// Max returns the entry with the largest key.
+func (m *Map[I, K, V]) Max() (k I, v V, ok bool) { return m.a().Max() }
+
+// Set is an ordered set of intervals of type I with bounds of type K whose
+// iterator provides efficient overlap queries.
+type Set[I, K any] Map[I, K, struct{}]
+
+// NewSet constructs a Set over intervals described by b. See New.
+func NewSet[I, K any](b Bounds[I, K], opts ...aug.Option) *Set[I, K] {
+	return (*Set[I, K])(New[I, K, struct{}](b, opts...))
 }
 
-// Clone clones the Set, lazily. It does so in constant time.
-func (t *Set[I, T]) Clone() Set[I, T] {
-	return (Set[I, T])((*Map[I, T, struct{}])(t).Clone())
+func (s *Set[I, K]) m() *Map[I, K, struct{}] { return (*Map[I, K, struct{}])(s) }
+
+// Overlapping returns an iterator over the items that overlap bounds, in
+// order of their start keys.
+func (s *Set[I, K]) Overlapping(bounds I) iter.Seq[I] {
+	return keys(s.m().Overlapping(bounds))
 }
 
-// Upsert inserts or updates the provided item. It returns
-// the overwritten item if a previous value existed for the key.
-func (t *Set[I, T]) Upsert(item I) (replaced I, overwrote bool) {
-	replaced, _, overwrote = t.Map.Upsert(item, struct{}{})
+// Clear removes all items, returning nodes no other set references to the
+// free list.
+func (s *Set[I, K]) Clear() { s.m().Clear() }
+
+// Clone clones the set, lazily. It does so in constant time.
+func (s *Set[I, K]) Clone() *Set[I, K] { return (*Set[I, K])(s.m().Clone()) }
+
+// Upsert inserts or replaces item, returning any replaced item.
+func (s *Set[I, K]) Upsert(item I) (replaced I, overwrote bool) {
+	replaced, _, overwrote = s.m().Upsert(item, struct{}{})
 	return replaced, overwrote
 }
 
-// Delete removes the value with the provided key. It returns true if the
-// item existed in the set.
-func (t *Set[I, T]) Delete(item I) (removed bool) {
-	_, _, removed = t.Map.Delete(item)
+// Delete removes item, reporting whether it was present.
+func (s *Set[I, K]) Delete(item I) (removed bool) {
+	_, _, removed = s.m().Delete(item)
 	return removed
 }
 
-// Iterator constructs an iterator for this set.
-func (t *Set[I, T]) Iterator() Iterator[I, T, struct{}] {
-	return (*Map[I, T, struct{}])(t).Iterator()
+// Contains reports whether item is in the set.
+func (s *Set[I, K]) Contains(item I) bool {
+	_, ok := s.m().Get(item)
+	return ok
+}
+
+// Len returns the number of items.
+func (s *Set[I, K]) Len() int { return s.m().Len() }
+
+// Height returns the height of the tree.
+func (s *Set[I, K]) Height() int { return s.m().Height() }
+
+// Degree returns the degree of the tree.
+func (s *Set[I, K]) Degree() int { return s.m().Degree() }
+
+// Compare compares two items with the set's comparison function.
+func (s *Set[I, K]) Compare(a, b I) int { return s.m().Compare(a, b) }
+
+// String renders the tree in a Newick-like format.
+func (s *Set[I, K]) String() string { return s.m().String() }
+
+// Verify checks the tree's invariants; see aug.Map.Verify.
+func (s *Set[I, K]) Verify() error { return s.m().Verify() }
+
+// Iterator returns a new iterator positioned before the first item.
+func (s *Set[I, K]) Iterator() Iterator[I, K, struct{}] { return s.m().Iterator() }
+
+// Cursor returns a new cursor positioned before the first item.
+func (s *Set[I, K]) Cursor() aug.Cursor[I, struct{}, subtreeBound[K]] { return s.m().Cursor() }
+
+// All returns an iterator over every item in order.
+func (s *Set[I, K]) All() iter.Seq[I] { return keys(s.m().All()) }
+
+// Backward returns an iterator over every item in reverse order.
+func (s *Set[I, K]) Backward() iter.Seq[I] { return keys(s.m().Backward()) }
+
+// Range returns an iterator over the items in [lo, hi).
+func (s *Set[I, K]) Range(lo, hi I) iter.Seq[I] { return keys(s.m().Range(lo, hi)) }
+
+// From returns an iterator over the items >= lo.
+func (s *Set[I, K]) From(lo I) iter.Seq[I] { return keys(s.m().From(lo)) }
+
+// Min returns the smallest item.
+func (s *Set[I, K]) Min() (item I, ok bool) {
+	item, _, ok = s.m().Min()
+	return item, ok
+}
+
+// Max returns the largest item.
+func (s *Set[I, K]) Max() (item I, ok bool) {
+	item, _, ok = s.m().Max()
+	return item, ok
+}
+
+func keys[T any](seq iter.Seq2[T, struct{}]) iter.Seq[T] {
+	return func(yield func(T) bool) {
+		for k := range seq {
+			if !yield(k) {
+				return
+			}
+		}
+	}
 }

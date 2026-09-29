@@ -16,20 +16,12 @@ package interval
 
 import (
 	"cmp"
+	"slices"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
-// Interval represents an interval with bounds from [Key(), End()) where
-// Key() is inclusive and End() is exclusive. If Key() == End(), then the
-// Inteval represents a point that only includes that value. Intervals with
-// Key() which is larger than End() are invalid and may result in panics
-// upon insertion.
-type Interval[K any] interface {
-	Key() K
-	End() K
-}
+// Cmp is a comparison function.
+type Cmp[T any] func(T, T) int
 
 type IntervalWithID[K, ID any] interface {
 	Interval[K]
@@ -69,13 +61,12 @@ func TestIntervalTree(t *testing.T) {
 			t.Fatalf("expected %d, got %d", exp, got)
 		}
 	}
-	tree := MakeMap[IntInterval, int, struct{}](
-		cmp.Compare[int],
-		IntervalCompare[IntInterval](cmp.Compare[int]),
-		IntInterval.Key,
-		IntInterval.End,
-		nil,
-	)
+	tree := New[IntInterval, int, struct{}](Bounds[IntInterval, int]{
+		Compare:          cmp.Compare[int],
+		Key:              IntInterval.Key,
+		End:              IntInterval.End,
+		CompareIntervals: IntervalCompare[IntInterval](cmp.Compare[int]),
+	})
 	items := []IntInterval{{1, 4}, {2, 5}, {3, 3}, {3, 6}, {4, 7}}
 	for _, item := range items {
 		tree.Upsert(item, struct{}{})
@@ -83,7 +74,7 @@ func TestIntervalTree(t *testing.T) {
 	iter := tree.Iterator()
 	iter.First()
 	for _, exp := range items {
-		assertEq(t, exp, iter.Cur())
+		assertEq(t, exp, iter.Key())
 		iter.Next()
 	}
 
@@ -102,8 +93,10 @@ func TestIntervalTree(t *testing.T) {
 	} {
 		var res []IntInterval
 		for iter.FirstOverlap(tc.q); iter.Valid(); iter.NextOverlap() {
-			res = append(res, iter.Cur())
+			res = append(res, iter.Key())
 		}
-		require.Equal(t, tc.res, res)
+		if !slices.Equal(tc.res, res) {
+			t.Fatalf("expected %v, got %v", tc.res, res)
+		}
 	}
 }

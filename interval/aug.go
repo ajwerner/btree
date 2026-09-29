@@ -15,25 +15,25 @@
 
 package interval
 
-import "github.com/ajwerner/btree/internal/abstract"
+import "github.com/ajwerner/btree/aug"
 
-type aug[K any] struct {
+type subtreeBound[K any] struct {
 	keyBound[K]
 }
 
 type updater[I, K, V any] struct {
 	key, end func(I) K
-	cmp      Cmp[K]
+	cmp      func(K, K) int
 	hasEnd   func(I) bool
 }
 
 func (u *updater[I, K, V]) Update(
-	n *abstract.Node[I, V, aug[K]],
-	md abstract.UpdateInfo[I, aug[K]],
+	n *aug.Node[I, V, subtreeBound[K]],
+	md aug.UpdateInfo[I, V, subtreeBound[K]],
 ) (updated bool) {
-	a := n.GetA()
+	a := n.Aug()
 	switch md.Action {
-	case abstract.Insertion:
+	case aug.Insertion:
 		up := u.upperBound(md.RelevantKey)
 		if child := md.ModifiedOther; child != nil {
 			if up.compare(u.cmp, child.keyBound) < 0 {
@@ -45,7 +45,7 @@ func (u *updater[I, K, V]) Update(
 			return true
 		}
 		return false
-	case abstract.Removal:
+	case aug.Removal:
 		up := u.upperBound(md.RelevantKey)
 		if child := md.ModifiedOther; child != nil {
 			if up.compare(u.cmp, child.keyBound) < 0 {
@@ -57,13 +57,13 @@ func (u *updater[I, K, V]) Update(
 			return a.compare(u.cmp, up) != 0
 		}
 		return false
-	case abstract.Split:
+	case aug.Split:
 		if a.compare(u.cmp, md.ModifiedOther.keyBound) != 0 &&
 			a.compare(u.cmp, u.upperBound(md.RelevantKey)) != 0 {
 			return false
 		}
 		fallthrough
-	case abstract.Default:
+	case aug.Default, aug.Replacement:
 		prev := a.keyBound
 		a.keyBound = u.findUpperBound(n)
 		return a.compare(u.cmp, prev) != 0
@@ -84,16 +84,11 @@ func (up *updater[I, K, V]) upperBound(interval I) keyBound[K] {
 	return keyBound[K]{k: up.end(interval)}
 }
 
-func isZero[K any](cmp Cmp[K], k K) bool {
-	var z K
-	return cmp(k, z) == 0
-}
-
-func (up *updater[I, K, V]) findUpperBound(n *abstract.Node[I, V, aug[K]]) keyBound[K] {
+func (up *updater[I, K, V]) findUpperBound(n *aug.Node[I, V, subtreeBound[K]]) keyBound[K] {
 	var max keyBound[K]
 	var setMax bool
 	for i, cnt := int16(0), n.Count(); i < cnt; i++ {
-		ub := up.upperBound(n.GetKey(i))
+		ub := up.upperBound(n.Key(i))
 		if !setMax || max.compare(up.cmp, ub) < 0 {
 			setMax = true
 			max = ub
@@ -101,7 +96,7 @@ func (up *updater[I, K, V]) findUpperBound(n *abstract.Node[I, V, aug[K]]) keyBo
 	}
 	if !n.IsLeaf() {
 		for i, cnt := int16(0), n.Count(); i <= cnt; i++ {
-			ub := n.GetChild(i).keyBound
+			ub := n.ChildAug(i).keyBound
 			if max.compare(up.cmp, ub) < 0 {
 				max = ub
 			}
@@ -110,7 +105,7 @@ func (up *updater[I, K, V]) findUpperBound(n *abstract.Node[I, V, aug[K]]) keyBo
 	return max
 }
 
-func (b keyBound[K]) compare(cmp Cmp[K], o keyBound[K]) int {
+func (b keyBound[K]) compare(cmp func(K, K) int, o keyBound[K]) int {
 	c := cmp(b.k, o.k)
 	if c != 0 {
 		return c
@@ -124,7 +119,7 @@ func (b keyBound[K]) compare(cmp Cmp[K], o keyBound[K]) int {
 	return -1
 }
 
-func (b keyBound[K]) contains(cmp Cmp[K], o K) bool {
+func (b keyBound[K]) contains(cmp func(K, K) int, o K) bool {
 	c := cmp(o, b.k)
 	if c == 0 {
 		return b.inclusive

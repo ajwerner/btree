@@ -15,6 +15,7 @@
 package btree_test
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 
@@ -22,14 +23,14 @@ import (
 )
 
 func ExampleMap() {
-	m := btree.MakeMap[string, int](strings.Compare)
+	m := btree.New[string, int](strings.Compare)
 	m.Upsert("foo", 1)
 	m.Upsert("bar", 2)
 	fmt.Println(m.Get("foo"))
 	fmt.Println(m.Get("baz"))
 	it := m.Iterator()
 	for it.First(); it.Valid(); it.Next() {
-		fmt.Println(it.Cur(), it.Value())
+		fmt.Println(it.Key(), it.Value())
 	}
 
 	// Output:
@@ -37,4 +38,42 @@ func ExampleMap() {
 	// 0 false
 	// bar 2
 	// foo 1
+}
+
+// ExampleMapCursor charges the least loaded host and moves it to its new
+// position without a second descent.
+func ExampleMapCursor() {
+	type host struct {
+		load int
+		name string
+	}
+	byLoad := func(a, b host) int {
+		if c := cmp.Compare(a.load, b.load); c != 0 {
+			return c
+		}
+		return strings.Compare(a.name, b.name)
+	}
+	fleet := btree.NewSet(byLoad)
+	fleet.Upsert(host{3, "a"})
+	fleet.Upsert(host{1, "b"})
+	fleet.Upsert(host{2, "c"})
+
+	c := fleet.Cursor()
+	for range 3 {
+		c.First()
+		h := c.Key()
+		h.load += 2
+		c.Rekey(h)
+		fmt.Println("charged", h.name, "to", h.load)
+	}
+	for h := range fleet.All() {
+		fmt.Println(h.name, h.load)
+	}
+	// Output:
+	// charged b to 3
+	// charged c to 4
+	// charged a to 5
+	// b 3
+	// c 4
+	// a 5
 }
