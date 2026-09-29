@@ -47,7 +47,7 @@ The `orderstat` package provides order-statistic trees: `Rank(key)` (the number 
 
 ## Custom augmentations
 
-Describe an augmentation as a `Monoid` (a per-entry contribution and an associative `Combine`; add `Uncombine` for O(1) removals) and hand `aug.MonoidUpdater(m)` to `aug.New`. Ready-made pieces: `aug.Count`, `aug.Sum(f)`, and `aug.PairOf(a, b)` to keep several side by side. Every such map gets `Total()`, `Prefix(key)`, `Aggregate(lo, hi)`, and on its iterator `Prefix()` and `SeekWhere(pred)`, which descends once to the first entry at which a monotone predicate on the running prefix flips (selection by rank, by cumulative sum, and so on). See `Example_customAugmentation` in package `aug`. Augmentations that are not monoids (the interval tree's upper bound) implement `aug.Updater` directly.
+Describe an augmentation as a `Monoid` (a per-entry contribution and a commutative, associative `Combine`; add `Uncombine` for O(1) removals) and build the map with `aug.NewMonoid(cmp, m)`. Ready-made pieces: `aug.Count`, `aug.Sum(f)`, and `aug.PairOf(a, b)` to keep several side by side. A `MonoidMap` answers `Total()`, `Prefix(key)` and `Aggregate(lo, hi)`, and its iterators and cursors answer `Prefix()` and `SeekWhere(pred)`, which descends once to the first entry at which a monotone predicate on the running prefix flips (selection by rank, by cumulative sum, and so on). See `Example_customAugmentation` in package `aug`. Augmentations that are not monoids (the interval tree's upper bound) implement `aug.Updater` directly with `aug.New`.
 
 ## License
 

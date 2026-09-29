@@ -34,12 +34,12 @@ func (maxOf) Equal(a, b int) bool  { return a == b }
 
 type stats = aug.Pair[int, aug.Pair[int, int]] // count, (sum, max)
 
-func newStatsMap(degree int) *aug.Map[int, int, stats] {
+func newStatsMap(degree int) *aug.MonoidMap[int, int, stats] {
 	m := aug.PairOf[int, int, int, aug.Pair[int, int]](
 		aug.Count[int, int]{},
 		aug.PairOf[int, int, int, int](aug.Sum(func(_ int, v int) int { return v }), maxOf{}),
 	)
-	return aug.New[int, int, stats](cmp.Compare[int], aug.MonoidUpdater(m), aug.WithDegree(degree))
+	return aug.NewMonoid[int, int, stats](cmp.Compare[int], m, aug.WithDegree(degree))
 }
 
 func statsOf(keys []int, ref map[int]int, lo, hi int) (s stats) {
@@ -69,9 +69,9 @@ func testMonoidAggregates(t *testing.T, degree int) {
 	rng := rand.New(rand.NewPCG(seed, 0))
 	m := newStatsMap(degree)
 	ref := map[int]int{}
-	var clones []*aug.Map[int, int, stats]
+	var clones []*aug.MonoidMap[int, int, stats]
 	var cloneRefs []map[int]int
-	check := func(m *aug.Map[int, int, stats], ref map[int]int) {
+	check := func(m *aug.MonoidMap[int, int, stats], ref map[int]int) {
 		t.Helper()
 		if err := m.Verify(); err != nil {
 			t.Fatal(err)
@@ -179,17 +179,6 @@ func testMonoidAggregates(t *testing.T, degree int) {
 	check(m, ref)
 }
 
-func TestMonoidRequired(t *testing.T) {
-	m := aug.New[int, int, struct{}](cmp.Compare[int], nil)
-	m.Upsert(1, 1)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected a panic")
-		}
-	}()
-	m.Prefix(1)
-}
-
 // Example_customAugmentation maintains, per subtree, the number of hosts
 // and their total load, and answers "how many hosts in pool 2 and how loaded
 // are they" and "which host takes the cumulative load past a threshold"
@@ -203,9 +192,9 @@ func Example_customAugmentation() {
 		}
 		return cmp.Compare(a.host, b.host)
 	}
-	m := aug.New[key, int, load](compare, aug.MonoidUpdater(
+	m := aug.NewMonoid[key, int, load](compare,
 		aug.PairOf[key, int, int, int](aug.Count[key, int]{}, aug.Sum(func(_ key, v int) int { return v })),
-	))
+	)
 	for host := range 10 {
 		m.Upsert(key{pool: host % 3, host: host}, 10*host)
 	}

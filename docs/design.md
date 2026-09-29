@@ -104,11 +104,13 @@ optional `Folder` folds a span of a node in one call, which matters because
 `Of` and `Combine` are interface calls. `Count`, `Sum` and `PairOf` are the
 building blocks; orderstat is `Count`.
 
-With a monoid the map answers `Total`, `Prefix(key)` (aggregate of all
-smaller keys, one descent) and `Aggregate(lo, hi)` (two boundary paths),
-and the iterator answers `Prefix()` at its position and `SeekWhere(pred)`,
-one descent to the first entry where a monotone predicate on the running
-prefix flips. `SeekWhere` pays a predicate and a `Combine` per child
+`NewMonoid` returns a `MonoidMap`, the only type that offers the aggregate
+queries, so a plain map cannot expose methods that would panic: `Total`,
+`Prefix(key)` (aggregate of all smaller keys, one descent) and
+`Aggregate(lo, hi)` (two boundary paths) on the map, and `Prefix()` at the
+position and `SeekWhere(pred)`, one descent to the first entry where a
+monotone predicate on the running prefix flips, on its iterators and
+cursors. `SeekWhere` pays a predicate and a `Combine` per child
 visited; orderstat's `SeekNth` is a native descent by counts for that
 reason.
 

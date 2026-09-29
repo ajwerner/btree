@@ -27,47 +27,47 @@ import (
 // Map is an ordered map from K to V which additionally offers rank
 // queries. Its augmentation is the number of entries in each subtree.
 type Map[K, V any] struct {
-	*aug.Map[K, V, int]
+	*aug.MonoidMap[K, V, int]
 }
 
 // New constructs a Map with the provided comparison function. See
 // aug.WithDegree and aug.WithFreeList for the options.
 func New[K, V any](cmp func(K, K) int, opts ...aug.Option) *Map[K, V] {
-	return &Map[K, V]{Map: aug.New[K, V, int](cmp, aug.MonoidUpdater[K, V, int](aug.Count[K, V]{}), opts...)}
+	return &Map[K, V]{MonoidMap: aug.NewMonoid[K, V, int](cmp, aug.Count[K, V]{}, opts...)}
 }
 
 // NewOrdered constructs a Map keyed by a type that supports <, ordered that
 // way. It is faster than New with cmp.Compare because nodes are searched
 // with < directly.
 func NewOrdered[K cmp.Ordered, V any](opts ...aug.Option) *Map[K, V] {
-	return &Map[K, V]{Map: aug.NewOrdered[K, V, int](aug.MonoidUpdater[K, V, int](aug.Count[K, V]{}), opts...)}
+	return &Map[K, V]{MonoidMap: aug.NewOrderedMonoid[K, V, int](aug.Count[K, V]{}, opts...)}
 }
 
 // Iterator constructs a new Iterator for this Map.
 func (t *Map[K, V]) Iterator() Iterator[K, V] {
-	return Iterator[K, V]{Iterator: t.Map.Iterator()}
+	return Iterator[K, V]{MonoidIterator: t.MonoidMap.Iterator()}
 }
 
 // Cursor constructs a new Cursor for this Map.
 func (t *Map[K, V]) Cursor() Cursor[K, V] {
-	return Cursor[K, V]{Cursor: t.Map.Cursor()}
+	return Cursor[K, V]{MonoidCursor: t.MonoidMap.Cursor()}
 }
 
 // Clone clones the Map, lazily. It does so in constant time.
 func (t *Map[K, V]) Clone() *Map[K, V] {
-	return &Map[K, V]{Map: t.Map.Clone()}
+	return &Map[K, V]{MonoidMap: t.MonoidMap.Clone()}
 }
 
 // Rank returns the number of entries with keys less than k, and whether an
 // entry with key k exists. When it does not, the rank is the position at
 // which it would be inserted.
 func (t *Map[K, V]) Rank(k K) (rank int, found bool) {
-	return t.Map.Prefix(k)
+	return t.MonoidMap.Prefix(k)
 }
 
 // Count returns the number of entries with keys in [lo, hi).
 func (t *Map[K, V]) Count(lo, hi K) int {
-	return t.Map.Aggregate(lo, hi)
+	return t.MonoidMap.Aggregate(lo, hi)
 }
 
 // Nth returns the entry with rank n, i.e. with exactly n entries before it.
@@ -104,20 +104,20 @@ func (t *Set[T]) Clone() *Set[T] {
 // Upsert inserts or updates the provided item. It returns
 // the overwritten item if a previous value existed for the key.
 func (t *Set[T]) Upsert(item T) (replaced T, overwrote bool) {
-	replaced, _, overwrote = t.Map.Upsert(item, struct{}{})
+	replaced, _, overwrote = t.MonoidMap.Upsert(item, struct{}{})
 	return replaced, overwrote
 }
 
 // Delete removes the provided item. It returns true if the item existed in
 // the set.
 func (t *Set[T]) Delete(item T) (removed bool) {
-	_, _, removed = t.Map.Delete(item)
+	_, _, removed = t.MonoidMap.Delete(item)
 	return removed
 }
 
 // Contains returns true if the item exists in the set.
 func (t *Set[T]) Contains(item T) bool {
-	_, ok := t.Map.Get(item)
+	_, ok := t.MonoidMap.Get(item)
 	return ok
 }
 
@@ -133,34 +133,34 @@ func (t *Set[T]) Cursor() Cursor[T, struct{}] {
 
 // All returns an iterator over every item in order.
 func (t *Set[T]) All() iter.Seq[T] {
-	return keys(t.Map.All())
+	return keys(t.MonoidMap.All())
 }
 
 // Backward returns an iterator over every item in reverse order.
 func (t *Set[T]) Backward() iter.Seq[T] {
-	return keys(t.Map.Backward())
+	return keys(t.MonoidMap.Backward())
 }
 
 // Range returns an iterator over the items in [lo, hi) in order.
 func (t *Set[T]) Range(lo, hi T) iter.Seq[T] {
-	return keys(t.Map.Range(lo, hi))
+	return keys(t.MonoidMap.Range(lo, hi))
 }
 
 // From returns an iterator over the items greater than or equal to lo in
 // order.
 func (t *Set[T]) From(lo T) iter.Seq[T] {
-	return keys(t.Map.From(lo))
+	return keys(t.MonoidMap.From(lo))
 }
 
 // Min returns the smallest item.
 func (t *Set[T]) Min() (item T, ok bool) {
-	item, _, ok = t.Map.Min()
+	item, _, ok = t.MonoidMap.Min()
 	return item, ok
 }
 
 // Max returns the largest item.
 func (t *Set[T]) Max() (item T, ok bool) {
-	item, _, ok = t.Map.Max()
+	item, _, ok = t.MonoidMap.Max()
 	return item, ok
 }
 
@@ -177,12 +177,12 @@ func keys[T any](seq iter.Seq2[T, struct{}]) iter.Seq[T] {
 // Rank returns the number of items less than item, and whether item is in
 // the set.
 func (t *Set[T]) Rank(item T) (rank int, found bool) {
-	return t.Map.Prefix(item)
+	return t.MonoidMap.Prefix(item)
 }
 
 // Count returns the number of items in [lo, hi).
 func (t *Set[T]) Count(lo, hi T) int {
-	return t.Map.Aggregate(lo, hi)
+	return t.MonoidMap.Aggregate(lo, hi)
 }
 
 // Nth returns the item with rank n.
@@ -204,7 +204,7 @@ func NewFreeList[K, V any](size int) FreeList[K, V] {
 // Iterator allows iteration through the collection. It offers all the usual
 // iterator methods, plus Rank and SeekNth.
 type Iterator[K, V any] struct {
-	aug.Iterator[K, V, int]
+	aug.MonoidIterator[K, V, int]
 }
 
 // Rank returns the number of entries before the iterator's position. If the
@@ -260,7 +260,7 @@ func seekNth[K, V any](ll *aug.LowLevelIterator[K, V, int], nth int) {
 // Cursor is an Iterator that can also mutate the collection at its
 // position. See aug.Cursor.
 type Cursor[K, V any] struct {
-	aug.Cursor[K, V, int]
+	aug.MonoidCursor[K, V, int]
 }
 
 // Rank returns the number of entries before the cursor's position.

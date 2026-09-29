@@ -28,7 +28,7 @@ import (
 func TestSeekWhereNonMonotone(t *testing.T) {
 	rng := rand.New(rand.NewPCG(5, 6))
 	for _, degree := range []int{2, 16} {
-		m := aug.New[int, int, int](cmp.Compare[int], aug.MonoidUpdater[int, int, int](aug.Count[int, int]{}), aug.WithDegree(degree))
+		m := aug.NewMonoid[int, int, int](cmp.Compare[int], aug.Count[int, int]{}, aug.WithDegree(degree))
 		for i := range 5000 {
 			m.Upsert(i, i)
 		}
@@ -82,7 +82,7 @@ func TestDeepTree(t *testing.T) {
 		t.Skip("builds a 2M-entry tree")
 	}
 	const n = 2_000_000
-	m := aug.New[int, int, int](cmp.Compare[int], aug.MonoidUpdater[int, int, int](aug.Count[int, int]{}), aug.WithDegree(2))
+	m := aug.NewMonoid[int, int, int](cmp.Compare[int], aug.Count[int, int]{}, aug.WithDegree(2))
 	for i := range n {
 		m.Upsert(i, i)
 	}

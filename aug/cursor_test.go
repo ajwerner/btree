@@ -28,10 +28,10 @@ import (
 
 type sumStats = aug.Pair[int, int] // count, sum of values
 
-func newSumMap(degree int) *aug.Map[int, int, sumStats] {
-	return aug.New[int, int, sumStats](cmp.Compare[int], aug.MonoidUpdater(
+func newSumMap(degree int) *aug.MonoidMap[int, int, sumStats] {
+	return aug.NewMonoid[int, int, sumStats](cmp.Compare[int],
 		aug.PairOf[int, int, int, int](aug.Count[int, int]{}, aug.Sum(func(_ int, v int) int { return v })),
-	), aug.WithDegree(degree))
+		aug.WithDegree(degree))
 }
 
 func TestCursor(t *testing.T) {
@@ -56,7 +56,7 @@ func testCursor(t *testing.T, degree int) {
 		slices.Sort(keys)
 		return keys
 	}
-	check := func(m *aug.Map[int, int, sumStats], ref map[int]int) {
+	check := func(m *aug.MonoidMap[int, int, sumStats], ref map[int]int) {
 		t.Helper()
 		if err := m.Verify(); err != nil {
 			t.Fatal(err)
@@ -84,7 +84,7 @@ func testCursor(t *testing.T, degree int) {
 		}
 	}
 	type snapshot struct {
-		m   *aug.Map[int, int, sumStats]
+		m   *aug.MonoidMap[int, int, sumStats]
 		ref map[int]int
 	}
 	var snapshots []snapshot
@@ -263,7 +263,7 @@ func BenchmarkRekey(b *testing.B) {
 	rng := rand.New(rand.NewPCG(3, 5))
 	keys := make([]fitKey, fleet)
 	fl := aug.NewFreeList[fitKey, int, int](2048)
-	base := aug.New[fitKey, int, int](cmpFit, aug.MonoidUpdater[fitKey, int, int](aug.Count[fitKey, int]{}), aug.WithFreeList(fl))
+	base := aug.NewMonoid[fitKey, int, int](cmpFit, aug.Count[fitKey, int]{}, aug.WithFreeList(fl))
 	for i := range keys {
 		keys[i] = fitKey{pool: uint64(i % 100), fullness: uint64(rng.IntN(1000)), node: uint64(i)}
 		base.Upsert(keys[i], i)
@@ -271,7 +271,7 @@ func BenchmarkRekey(b *testing.B) {
 	picks := rng.Perm(fleet)
 	for _, name := range []string{"seek+delete+upsert", "cursor.Rekey"} {
 		b.Run(name, func(b *testing.B) {
-			var m *aug.Map[fitKey, int, int]
+			var m *aug.MonoidMap[fitKey, int, int]
 			i := 0
 			b.ReportAllocs()
 			for b.Loop() {
@@ -317,7 +317,7 @@ func FuzzCursor(f *testing.F) {
 		m := newSumMap(degree)
 		ref := map[int]int{}
 		type snapshot struct {
-			m   *aug.Map[int, int, sumStats]
+			m   *aug.MonoidMap[int, int, sumStats]
 			ref map[int]int
 		}
 		var snaps []snapshot
@@ -367,7 +367,7 @@ func FuzzCursor(f *testing.F) {
 				}
 			}
 		}
-		verify := func(m *aug.Map[int, int, sumStats], ref map[int]int) {
+		verify := func(m *aug.MonoidMap[int, int, sumStats], ref map[int]int) {
 			t.Helper()
 			if err := m.Verify(); err != nil {
 				t.Fatal(err)
@@ -404,7 +404,7 @@ func TestCursorWriterWithSnapshotReaders(t *testing.T) {
 	for i := range 5000 {
 		m.Upsert(i, i)
 	}
-	snapshots := make(chan *aug.Map[int, int, sumStats], 8)
+	snapshots := make(chan *aug.MonoidMap[int, int, sumStats], 8)
 	done := make(chan struct{})
 	var wg sync.WaitGroup
 	for range 4 {

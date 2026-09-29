@@ -70,9 +70,7 @@ func (c *config[K, V, A]) foldBefore(acc A, n *Node[K, V, A], pos int, withChild
 	return c.foldEntries(acc, n, 0, pos)
 }
 
-// Total returns the aggregate over every entry in the Map. It requires a
-// Monoid augmentation (see MonoidUpdater).
-func (t *Map[K, V, A]) Total() A {
+func (t *Map[K, V, A]) total() A {
 	t.monoid()
 	var zero A
 	if t.root == nil {
@@ -81,10 +79,7 @@ func (t *Map[K, V, A]) Total() A {
 	return t.root.aug
 }
 
-// Prefix returns the aggregate over every entry whose key is less than k,
-// and whether an entry with key k exists. It requires a Monoid augmentation
-// (see MonoidUpdater). It runs one descent.
-func (t *Map[K, V, A]) Prefix(k K) (prefix A, found bool) {
+func (t *Map[K, V, A]) prefix(k K) (prefix A, found bool) {
 	t.monoid()
 	n := t.root
 	for n != nil {
@@ -101,10 +96,7 @@ func (t *Map[K, V, A]) Prefix(k K) (prefix A, found bool) {
 	return prefix, false
 }
 
-// Aggregate returns the aggregate over every entry whose key is in
-// [lo, hi). It requires a Monoid augmentation (see MonoidUpdater). It runs
-// in O(degree * height).
-func (t *Map[K, V, A]) Aggregate(lo, hi K) A {
+func (t *Map[K, V, A]) aggregateRange(lo, hi K) A {
 	m := t.monoid()
 	var zero A
 	if t.root == nil || t.cfg.cmp(lo, hi) >= 0 {
@@ -144,11 +136,7 @@ func (t *Map[K, V, A]) aggregate(m Monoid[K, V, A], n *Node[K, V, A], lo, hi *K)
 	return m.Combine(acc, t.aggregate(m, n.children[j], nil, hi))
 }
 
-// Prefix returns the aggregate over every entry before the iterator's
-// position. If the iterator is past the end it returns the total; if it is
-// before the beginning (as after Reset) it returns the zero A. It requires a
-// Monoid augmentation (see MonoidUpdater). It runs in O(degree * height).
-func (i *Iterator[K, V, A]) Prefix() A {
+func (i *Iterator[K, V, A]) prefix() A {
 	i.r.monoid()
 	c := &i.r.cfg
 	var p A
@@ -166,19 +154,7 @@ func (i *Iterator[K, V, A]) Prefix() A {
 	return p
 }
 
-// SeekWhere positions the iterator at the first entry, in key order, for
-// which pred(prefix, contribution) is true, where prefix is the aggregate
-// over every entry before it and contribution is Of that entry. It returns
-// that prefix. If no entry qualifies the iterator is left past the end and
-// the total is returned.
-//
-// pred must be monotone: if pred(p, x) is false for the aggregate x of a
-// span, it must be false for (p', x') of every entry in the span, where p'
-// is the prefix of that entry. Predicates of the form "prefix combined with
-// x reaches a threshold" have this property, so SeekWhere implements
-// selection by rank (see orderstat) and by cumulative sum. It requires a
-// Monoid augmentation (see MonoidUpdater) and runs one descent.
-func (i *Iterator[K, V, A]) SeekWhere(pred func(prefix, contribution A) bool) A {
+func (i *Iterator[K, V, A]) seekWhere(pred func(prefix, contribution A) bool) A {
 	m := i.r.monoid()
 	i.Reset()
 	var p A

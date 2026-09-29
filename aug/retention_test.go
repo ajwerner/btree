@@ -41,7 +41,7 @@ func TestNoStaleReferences(t *testing.T) {
 
 func testNoStaleReferences(t *testing.T, degree int) {
 	const n = 3000
-	m := aug.New[string, *payload, int](strings.Compare, aug.MonoidUpdater[string, *payload, int](aug.Count[string, *payload]{}), aug.WithDegree(degree))
+	m := aug.NewMonoid[string, *payload, int](strings.Compare, aug.Count[string, *payload]{}, aug.WithDegree(degree))
 	weaks := make([]weak.Pointer[payload], n)
 	keys := make([]string, n)
 	for i := range n {
@@ -122,10 +122,10 @@ func testNoStaleReferences(t *testing.T, degree int) {
 // and values while the collector runs constantly, under the race detector
 // when enabled.
 func TestPointerTypesUnderGCPressure(t *testing.T) {
-	m := aug.New[string, *payload, int](strings.Compare, aug.MonoidUpdater[string, *payload, int](aug.Count[string, *payload]{}), aug.WithDegree(3))
+	m := aug.NewMonoid[string, *payload, int](strings.Compare, aug.Count[string, *payload]{}, aug.WithDegree(3))
 	ref := map[string]*payload{}
 	rng := rand.New(rand.NewPCG(3, 4))
-	var clones []*aug.Map[string, *payload, int]
+	var clones []*aug.MonoidMap[string, *payload, int]
 	c := m.Cursor()
 	for step := range 30000 {
 		k := fmt.Sprintf("k%04d", rng.IntN(2000))
