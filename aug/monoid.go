@@ -69,10 +69,53 @@ type Folder[K, V, A any] interface {
 // incrementally; otherwise they recompute the node from its entries and
 // children in O(degree).
 func MonoidUpdater[K, V, A any](m Monoid[K, V, A]) Updater[K, V, A] {
+	if c, ok := any(m).(Count[K, V]); ok {
+		// Count is common enough to deserve an Updater with no interface
+		// calls; the conversion below is a no-op since A is int.
+		return any(&countUpdater[K, V]{m: c}).(Updater[K, V, A])
+	}
 	u := &monoidUpdater[K, V, A]{m: m}
 	u.g, _ = m.(Group[K, V, A])
 	u.eq, _ = m.(Equaler[A])
 	return u
+}
+
+// countUpdater is MonoidUpdater specialised for Count.
+type countUpdater[K, V any] struct {
+	m Count[K, V]
+}
+
+func (u *countUpdater[K, V]) monoid() Monoid[K, V, int] { return u.m }
+
+func (u *countUpdater[K, V]) Update(n *Node[K, V, int], md UpdateInfo[K, V, int]) bool {
+	a := n.Aug()
+	switch md.Action {
+	case Insertion:
+		*a++
+		if md.ModifiedOther != nil {
+			*a += *md.ModifiedOther
+		}
+		return true
+	case Removal:
+		*a--
+		if md.ModifiedOther != nil {
+			*a -= *md.ModifiedOther
+		}
+		return true
+	case Split:
+		*a -= 1 + *md.ModifiedOther
+		return true
+	case Replacement:
+		return false
+	default:
+		prev := *a
+		count := len(n.entries)
+		for _, c := range n.children {
+			count += c.aug
+		}
+		*a = count
+		return prev != count
+	}
 }
 
 type monoidUpdater[K, V, A any] struct {
