@@ -47,7 +47,7 @@ func (i *Iterator[K, V, A]) SeekGE(key K) {
 	}
 	ll := i.lowLevel()
 	for {
-		pos, found := i.node.find(i.r.cfg.cmp, key)
+		pos, found := i.node.find(&i.r.cfg, key)
 		i.pos = int16(pos)
 		if found {
 			return
@@ -70,7 +70,7 @@ func (i *Iterator[K, V, A]) SeekLT(key K) {
 	}
 	ll := i.lowLevel()
 	for {
-		pos, found := i.node.find(i.r.cfg.cmp, key)
+		pos, found := i.node.find(&i.r.cfg, key)
 		i.pos = int16(pos)
 		if found || i.node.IsLeaf() {
 			i.Prev()

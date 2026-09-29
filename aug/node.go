@@ -16,6 +16,7 @@
 package aug
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -267,9 +268,15 @@ func (n *Node[K, V, A]) popFront() (K, V, *Node[K, V, A]) {
 }
 
 // find returns the index where the given item should be inserted into this
-// list. 'found' is true if the item already exists in the list at the given
-// index.
-func (n *Node[K, V, A]) find(cmp func(K, K) int, item K) (index int, found bool) {
+// node. 'found' is true if the item already exists at that index.
+func (n *Node[K, V, A]) find(c *config[K, V, A], item K) (index int, found bool) {
+	if c.find != nil {
+		return c.find(n, item)
+	}
+	return n.findCmp(c.cmp, item)
+}
+
+func (n *Node[K, V, A]) findCmp(cmp func(K, K) int, item K) (index int, found bool) {
 	// Logic copied from sort.Search. Inlining this gave
 	// an 11% speedup on BenchmarkBTreeDeleteInsert.
 	i, j := 0, len(n.entries)
@@ -280,6 +287,23 @@ func (n *Node[K, V, A]) find(cmp func(K, K) int, item K) (index int, found bool)
 		if c < 0 {
 			j = h
 		} else if c > 0 {
+			i = h + 1
+		} else {
+			return h, true
+		}
+	}
+	return i, false
+}
+
+// findOrdered is find for keys that support < directly.
+func findOrdered[K cmp.Ordered, V, A any](n *Node[K, V, A], item K) (index int, found bool) {
+	i, j := 0, len(n.entries)
+	for i < j {
+		h := int(uint(i+j) >> 1)
+		k := n.entries[h].k
+		if item < k {
+			j = h
+		} else if item > k {
 			i = h + 1
 		} else {
 			return h, true
@@ -370,7 +394,7 @@ func (n *Node[K, V, A]) updateOnReplace(cfg *Config[K, V, A], k K, v V, prevK K,
 // was replaced and false if an item was inserted. Also returns whether the
 // node's augmentation changed.
 func (n *Node[K, V, A]) insert(c *config[K, V, A], item K, value V) (replacedK K, replacedV V, replaced, changed bool) {
-	i, found := n.find(c.cmp, item)
+	i, found := n.find(c, item)
 	if found {
 		return n.replaceAt(c, i, item, value)
 	}
@@ -571,7 +595,7 @@ func (n *Node[K, V, A]) rebalanceOrMerge(c *config[K, V, A], i int) {
 func (n *Node[K, V, A]) remove(
 	c *config[K, V, A], item K,
 ) (outK K, outV V, found, changed bool) {
-	i, found := n.find(c.cmp, item)
+	i, found := n.find(c, item)
 	if n.IsLeaf() {
 		if found {
 			outK, outV, _ = n.removeAt(i)

@@ -18,6 +18,7 @@
 package orderstat
 
 import (
+	"cmp"
 	"iter"
 
 	"github.com/ajwerner/btree/aug"
@@ -33,6 +34,13 @@ type Map[K, V any] struct {
 // aug.WithDegree and aug.WithFreeList for the options.
 func New[K, V any](cmp func(K, K) int, opts ...aug.Option) *Map[K, V] {
 	return &Map[K, V]{Map: aug.New[K, V, int](cmp, aug.MonoidUpdater[K, V, int](aug.Count[K, V]{}), opts...)}
+}
+
+// NewOrdered constructs a Map keyed by a type that supports <, ordered that
+// way. It is faster than New with cmp.Compare because nodes are searched
+// with < directly.
+func NewOrdered[K cmp.Ordered, V any](opts ...aug.Option) *Map[K, V] {
+	return &Map[K, V]{Map: aug.NewOrdered[K, V, int](aug.MonoidUpdater[K, V, int](aug.Count[K, V]{}), opts...)}
 }
 
 // Iterator constructs a new Iterator for this Map.
@@ -80,6 +88,12 @@ type Set[T any] Map[T, struct{}]
 // aug.WithDegree and aug.WithFreeList for the options.
 func NewSet[T any](cmp func(T, T) int, opts ...aug.Option) *Set[T] {
 	return (*Set[T])(New[T, struct{}](cmp, opts...))
+}
+
+// NewOrderedSet constructs a Set of a type that supports <, ordered that
+// way. See NewOrdered.
+func NewOrderedSet[T cmp.Ordered](opts ...aug.Option) *Set[T] {
+	return (*Set[T])(NewOrdered[T, struct{}](opts...))
 }
 
 // Clone clones the Set, lazily. It does so in constant time.

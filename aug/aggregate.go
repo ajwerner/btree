@@ -88,7 +88,7 @@ func (t *Map[K, V, A]) Prefix(k K) (prefix A, found bool) {
 	t.monoid()
 	n := t.root
 	for n != nil {
-		i, found := n.find(t.cfg.cmp, k)
+		i, found := n.find(&t.cfg, k)
 		if n.IsLeaf() {
 			return t.cfg.foldBefore(prefix, n, i, false), found
 		}
@@ -121,10 +121,10 @@ func (t *Map[K, V, A]) aggregate(m Monoid[K, V, A], n *Node[K, V, A], lo, hi *K)
 	}
 	i, j := 0, len(n.entries)
 	if lo != nil {
-		i, _ = n.find(t.cfg.cmp, *lo) // first entry >= lo
+		i, _ = n.find(&t.cfg, *lo) // first entry >= lo
 	}
 	if hi != nil {
-		j, _ = n.find(t.cfg.cmp, *hi) // first entry >= hi
+		j, _ = n.find(&t.cfg, *hi) // first entry >= hi
 	}
 	var acc A
 	if n.IsLeaf() {

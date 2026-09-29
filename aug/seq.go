@@ -42,7 +42,7 @@ func (t *Map[K, V, A]) Backward() iter.Seq2[K, V] {
 func (t *Map[K, V, A]) Range(lo, hi K) iter.Seq2[K, V] {
 	return func(yield func(K, V) bool) {
 		if t.root != nil && t.cfg.cmp(lo, hi) < 0 {
-			t.root.ascendRange(t.cfg.cmp, &lo, &hi, yield)
+			t.root.ascendRange(&t.cfg, &lo, &hi, yield)
 		}
 	}
 }
@@ -52,7 +52,7 @@ func (t *Map[K, V, A]) Range(lo, hi K) iter.Seq2[K, V] {
 func (t *Map[K, V, A]) From(lo K) iter.Seq2[K, V] {
 	return func(yield func(K, V) bool) {
 		if t.root != nil {
-			t.root.ascendRange(t.cfg.cmp, &lo, nil, yield)
+			t.root.ascendRange(&t.cfg, &lo, nil, yield)
 		}
 	}
 }
@@ -106,23 +106,23 @@ func (n *Node[K, V, A]) descend(yield func(K, V) bool) bool {
 
 // ascendRange yields the entries of the subtree with keys in [lo, hi),
 // where a nil bound is unconstrained.
-func (n *Node[K, V, A]) ascendRange(cmp func(K, K) int, lo, hi *K, yield func(K, V) bool) bool {
+func (n *Node[K, V, A]) ascendRange(c *config[K, V, A], lo, hi *K, yield func(K, V) bool) bool {
 	if lo == nil && hi == nil {
 		return n.ascend(yield)
 	}
 	i, j := 0, len(n.entries)
 	if lo != nil {
-		i, _ = n.find(cmp, *lo) // first entry >= lo
+		i, _ = n.find(c, *lo) // first entry >= lo
 	}
 	if hi != nil {
-		j, _ = n.find(cmp, *hi) // first entry >= hi
+		j, _ = n.find(c, *hi) // first entry >= hi
 	}
 	leaf := n.IsLeaf()
 	if !leaf && i == j {
 		// Both bounds fall within the same child.
-		return n.children[i].ascendRange(cmp, lo, hi, yield)
+		return n.children[i].ascendRange(c, lo, hi, yield)
 	}
-	if !leaf && !n.children[i].ascendRange(cmp, lo, nil, yield) {
+	if !leaf && !n.children[i].ascendRange(c, lo, nil, yield) {
 		return false
 	}
 	for k := i; k < j; k++ {
@@ -135,7 +135,7 @@ func (n *Node[K, V, A]) ascendRange(cmp func(K, K) int, lo, hi *K, yield func(K,
 		}
 	}
 	if !leaf {
-		return n.children[j].ascendRange(cmp, nil, hi, yield)
+		return n.children[j].ascendRange(c, nil, hi, yield)
 	}
 	return true
 }

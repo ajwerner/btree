@@ -194,7 +194,7 @@ func (c *Cursor[K, V, A]) Upsert(k K, v V) (replacedV V, replaced bool) {
 	n := c.node
 	if n != nil && n.IsLeaf() && len(n.entries) < t.cfg.maxEntries {
 		if lo, hi := c.bounds(); c.within(k, lo, hi) {
-			i, found := n.find(t.cfg.cmp, k)
+			i, found := n.find(&t.cfg, k)
 			c.pin()
 			n = c.node
 			c.pos = int16(i)

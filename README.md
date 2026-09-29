@@ -10,7 +10,7 @@ A Go generic library providing copy-on-write B-tree data structures including ma
 Read more about the design in the [blog post](./blog/blog.md) (which predates the `aug` package and the `New` constructors).
 
 ```go
-m := btree.New[string, int](strings.Compare, btree.WithDegree(16))
+m := btree.NewOrdered[string, int](btree.WithDegree(16)) // or New(strings.Compare, ...)
 m.Upsert("foo", 1)
 snapshot := m.Clone() // O(1); writes to either side copy on write
 it := snapshot.Iterator()
@@ -35,7 +35,7 @@ The `aug` package exposes the tree with a per-node augmentation of type `A` main
 
 ## Performance
 
-Against google/btree v1.1.3 at equal degree, point operations (insert, get, delete, seek and scan) are at parity or ahead by 5-15%. On a scheduler-shaped workload (clone a 20k-entry map with 24-byte keys, move 200 entries to new keys, release the clone) a round takes 50 µs with delete + upsert and 42 µs through a `Cursor`, against 53 µs for google/btree at degree 16, with two allocations per round. Numbers and method are in `docs/review-2026-09-29.md`.
+Against google/btree v1.1.3 at equal degree, point operations (insert, get, delete, seek and scan) are at parity or ahead by 5-15% with a comparison function, and ahead by 20-25% with `NewOrdered` for keys that support `<` (ints, strings, floats). On a scheduler-shaped workload (clone a 20k-entry map with 24-byte keys, move 200 entries to new keys, release the clone) a round takes 50 µs with delete + upsert and 42 µs through a `Cursor`, against 53 µs for google/btree at degree 16, with two allocations per round. Numbers and method are in `docs/review-2026-09-29.md`.
 
 ## Interval Trees
 

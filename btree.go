@@ -18,6 +18,7 @@
 package btree
 
 import (
+	"cmp"
 	"iter"
 
 	"github.com/ajwerner/btree/aug"
@@ -34,6 +35,13 @@ func New[K, V any](cmp func(K, K) int, opts ...Option) *Map[K, V] {
 	return &Map[K, V]{Map: aug.New[K, V, struct{}](cmp, nil, opts...)}
 }
 
+// NewOrdered constructs a Map keyed by a type that supports <, ordered that
+// way. It is faster than New with cmp.Compare because nodes are searched
+// with < directly.
+func NewOrdered[K cmp.Ordered, V any](opts ...Option) *Map[K, V] {
+	return &Map[K, V]{Map: aug.NewOrdered[K, V, struct{}](nil, opts...)}
+}
+
 // Clone clones the Map, lazily. It does so in constant time.
 func (m *Map[K, V]) Clone() *Map[K, V] {
 	return &Map[K, V]{Map: m.Map.Clone()}
@@ -46,6 +54,12 @@ type Set[T any] Map[T, struct{}]
 // WithDegree and WithFreeList for the options.
 func NewSet[T any](cmp func(T, T) int, opts ...Option) *Set[T] {
 	return (*Set[T])(New[T, struct{}](cmp, opts...))
+}
+
+// NewOrderedSet constructs a Set of a type that supports <, ordered that
+// way. See NewOrdered.
+func NewOrderedSet[T cmp.Ordered](opts ...Option) *Set[T] {
+	return (*Set[T])(NewOrdered[T, struct{}](opts...))
 }
 
 // Clone clones the Set, lazily. It does so in constant time.

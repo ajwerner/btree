@@ -127,13 +127,15 @@ func checkMap(t *testing.T, tag string, m *Map[int, int], r *model, rng *rand.Ra
 // model with interleaved Upsert, Delete, Clone and Reset operations.
 func TestDifferential(t *testing.T) {
 	for _, degree := range []int{2, 3, 5, 16, 64} {
-		t.Run(fmt.Sprintf("degree=%d", degree), func(t *testing.T) {
-			testDifferential(t, degree)
-		})
+		for _, ordered := range []bool{false, true} {
+			t.Run(fmt.Sprintf("degree=%d/ordered=%v", degree, ordered), func(t *testing.T) {
+				testDifferential(t, degree, ordered)
+			})
+		}
 	}
 }
 
-func testDifferential(t *testing.T, degree int) {
+func testDifferential(t *testing.T, degree int, ordered bool) {
 	seed := rand.Uint64()
 	t.Logf("seed %d", seed)
 	rng := rand.New(rand.NewPCG(seed, 0))
@@ -143,6 +145,9 @@ func testDifferential(t *testing.T, degree int) {
 		r *model
 	}
 	base := New[int, int](cmp.Compare[int], WithDegree(degree))
+	if ordered {
+		base = NewOrdered[int, int](WithDegree(degree))
+	}
 	trees := []tree{{base, &model{m: map[int]int{}}}}
 	const steps = 20000
 	for step := range steps {

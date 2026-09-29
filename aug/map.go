@@ -15,7 +15,10 @@
 
 package aug
 
-import "strings"
+import (
+	"cmp"
+	"strings"
+)
 
 // Map is an augmented copy-on-write B-tree map from K to V. Each node
 // carries an augmentation of type A maintained by the Updater given to New.
@@ -31,6 +34,14 @@ type Map[K, V, A any] struct {
 // and WithFreeList for the options.
 func New[K, V, A any](cmp func(K, K) int, up Updater[K, V, A], opts ...Option) *Map[K, V, A] {
 	return &Map[K, V, A]{cfg: makeConfig(cmp, up, opts)}
+}
+
+// NewOrdered constructs a Map keyed by a type that supports <, ordered
+// that way. It searches nodes with < directly rather than through a
+// comparison function, which is faster.
+func NewOrdered[K cmp.Ordered, V, A any](up Updater[K, V, A], opts ...Option) *Map[K, V, A] {
+	opts = append(opts, withFind(findOrdered[K, V, A]))
+	return &Map[K, V, A]{cfg: makeConfig(cmp.Compare[K], up, opts)}
 }
 
 // Degree returns the degree of the tree.
@@ -150,7 +161,7 @@ func (t *Map[K, V, A]) Len() int {
 func (t *Map[K, V, A]) Get(k K) (v V, ok bool) {
 	n := t.root
 	for n != nil {
-		i, found := n.find(t.cfg.cmp, k)
+		i, found := n.find(&t.cfg, k)
 		if found {
 			return n.entries[i].v, true
 		}

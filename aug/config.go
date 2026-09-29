@@ -112,8 +112,9 @@ func (c *Config[K, V, A]) Compare(a, b K) int { return c.cmp(a, b) }
 
 type config[K, V, A any] struct {
 	Config[K, V, A]
-	monoid     Monoid[K, V, A] // set when Updater came from MonoidUpdater
-	folder     Folder[K, V, A] // set when the monoid implements Folder
+	find       func(*Node[K, V, A], K) (int, bool) // nil: binary search with cmp
+	monoid     Monoid[K, V, A]                     // set when Updater came from MonoidUpdater
+	folder     Folder[K, V, A]                     // set when the monoid implements Folder
 	fl         FreeList[K, V, A]
 	maxEntries int
 	minEntries int
@@ -127,6 +128,7 @@ type Option interface {
 type options struct {
 	degree   int
 	freeList any
+	find     any
 }
 
 type optionFunc func(*options)
@@ -147,6 +149,11 @@ func WithDegree(degree int) Option {
 // any number of trees, including trees of different degrees.
 func WithFreeList[K, V, A any](fl FreeList[K, V, A]) Option {
 	return optionFunc(func(o *options) { o.freeList = fl })
+}
+
+// withFind replaces the node search. It is used by NewOrdered.
+func withFind[K, V, A any](find func(*Node[K, V, A], K) (int, bool)) Option {
+	return optionFunc(func(o *options) { o.find = find })
 }
 
 func makeConfig[K, V, A any](
@@ -175,8 +182,13 @@ func makeConfig[K, V, A any](
 		m = mu.monoid()
 		f, _ = m.(Folder[K, V, A])
 	}
+	var find func(*Node[K, V, A], K) (int, bool)
+	if o.find != nil {
+		find, _ = o.find.(func(*Node[K, V, A], K) (int, bool))
+	}
 	return config[K, V, A]{
 		Config:     Config[K, V, A]{Updater: up, cmp: cmp},
+		find:       find,
 		monoid:     m,
 		folder:     f,
 		fl:         fl,
