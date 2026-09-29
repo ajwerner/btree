@@ -13,65 +13,53 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package abstract
+package aug
 
-import (
-	"strings"
-)
+import "strings"
 
-// TODO(ajwerner): It'd be amazing to find a way to make this not a single
-// compile-time constant.
-
-const (
-	Degree     = 64
-	MaxEntries = 2*Degree - 1
-	MinEntries = Degree - 1
-)
-
-// TODO(ajwerner): Probably we want comparison to occur on pointers to the
-// objects rather than the objects themselves, at least in some cases. For very
-// large objects, probably it's better to just store the objects as pointers
-// in the abstract itself and to use a sync.Pool to pool allocations. For very
-// small objects, directly calling less on the object is probably ideal. The
-// question is mid-sized objects.
-
-// Map is an implementation of an augmented B-Tree.
-//
-// Write operations are not safe for concurrent mutation by multiple
-// goroutines, but Read operations are.
+// Map is an augmented copy-on-write B-tree map from K to V. Each node
+// carries an augmentation of type A maintained by the Updater given to New.
+// See the package documentation for the ownership and concurrency rules.
 type Map[K, V, A any] struct {
 	root   *Node[K, V, A]
 	length int
 	cfg    config[K, V, A]
 }
 
-// MakeMap constructs a new Map.
-func MakeMap[K, V, A any](cmp func(K, K) int, up Updater[K, V, A]) Map[K, V, A] {
-	return Map[K, V, A]{
-		cfg: makeConfig(cmp, up),
-	}
+// New constructs a Map with the provided comparison function and Updater.
+// The Updater may be nil, in which case A is never touched. See WithDegree
+// and WithFreeList for the options.
+func New[K, V, A any](cmp func(K, K) int, up Updater[K, V, A], opts ...Option) *Map[K, V, A] {
+	return &Map[K, V, A]{cfg: makeConfig(cmp, up, opts)}
 }
 
-// Reset removes all items from the AugBTree. In doing so, it allows memory
-// held by the AugBTree to be recycled. Failure to call this method before
-// letting a AugBTree be GCed is safe in that it won't cause a memory leak,
-// but it will prevent AugBTree nodes from being efficiently re-used.
-func (t *Map[K, V, A]) Reset() {
+// Degree returns the degree of the tree.
+func (t *Map[K, V, A]) Degree() int {
+	return t.cfg.minEntries + 1
+}
+
+// Clear removes all items from the Map, releasing its references to its
+// nodes. Nodes no longer referenced by any other Map are returned to the
+// free list. Failure to call Clear before dropping a Map is safe but
+// prevents nodes from being recycled, and keeps nodes shared with other
+// Maps in the copy-on-write state.
+func (t *Map[K, V, A]) Clear() {
 	if t.root != nil {
-		t.root.decRef(t.cfg.np, true /* recursive */)
+		t.root.decRef(&t.cfg, true /* recursive */)
 		t.root = nil
 	}
 	t.length = 0
 }
 
-// Clone clones the AugBTree, lazily. It does so in constant time.
-func (t *Map[K, V, A]) Clone() Map[K, V, A] {
+// Clone clones the Map, lazily. It does so in constant time. The clone
+// shares the receiver's free list.
+func (t *Map[K, V, A]) Clone() *Map[K, V, A] {
 	if t.root != nil {
 		// Incrementing the reference count on the root node is sufficient to
 		// ensure that no node in the cloned tree can be mutated by an actor
 		// holding a reference to the original tree and vice versa. This
-		// property is upheld because the root node in the receiver AugBTree and
-		// the returned AugBTree will both necessarily have a reference count of at
+		// property is upheld because the root node in the receiver and
+		// the returned Map will both necessarily have a reference count of at
 		// least 2 when this method returns. All tree mutations recursively
 		// acquire mutable node references (see mut) as they traverse down the
 		// tree. The act of acquiring a mutable node reference performs a clone
@@ -83,25 +71,29 @@ func (t *Map[K, V, A]) Clone() Map[K, V, A] {
 		// over the entire tree.
 		t.root.incRef()
 	}
-	return *t
+	c := *t
+	return &c
 }
 
-// Delete removes an item equal to the passed in item from the tree.
+// Delete removes the item with the given key from the tree, returning it.
 func (t *Map[K, V, A]) Delete(k K) (removedK K, v V, found bool) {
-	if t.root == nil || t.root.count == 0 {
+	if t.root == nil || len(t.root.entries) == 0 {
 		return removedK, v, false
 	}
-	if removedK, v, found, _ = mut(t.cfg.np, &t.root).remove(&t.cfg, k); found {
+	if removedK, v, found, _ = mut(&t.cfg, &t.root).remove(&t.cfg, k); found {
 		t.length--
 	}
-	if t.root.count == 0 {
+	if len(t.root.entries) == 0 {
 		old := t.root
 		if t.root.IsLeaf() {
 			t.root = nil
 		} else {
 			t.root = t.root.children[0]
+			// The reference to children[0] transfers to t.root.
+			old.children[0] = nil
+			old.children = old.children[:0]
 		}
-		old.decRef(t.cfg.np, false /* recursive */)
+		old.decRef(&t.cfg, false /* recursive */)
 	}
 	return removedK, v, found
 }
@@ -110,28 +102,23 @@ func (t *Map[K, V, A]) Delete(k K) (removedK K, v V, found bool) {
 // the given one, it is replaced with the new item.
 func (t *Map[K, V, A]) Upsert(item K, value V) (replacedK K, replacedV V, replaced bool) {
 	if t.root == nil {
-		t.root = t.cfg.np.getLeafNode()
-	} else if t.root.count >= MaxEntries {
-		splitLaK, splitLaV, splitNode := mut(t.cfg.np, &t.root).
-			split(&t.cfg, MaxEntries/2)
-		newRoot := t.cfg.np.getInteriorNode()
-		newRoot.count = 1
-		newRoot.keys[0] = splitLaK
-		newRoot.values[0] = splitLaV
-		newRoot.children[0] = t.root
-		newRoot.children[1] = splitNode
+		t.root = t.cfg.getLeaf()
+	} else if len(t.root.entries) >= t.cfg.maxEntries {
+		splitK, splitV, splitNode := mut(&t.cfg, &t.root).split(&t.cfg, t.cfg.maxEntries/2)
+		newRoot := t.cfg.getInterior()
+		newRoot.entries = append(newRoot.entries, entry[K, V]{v: splitV, k: splitK})
+		newRoot.children = append(newRoot.children, t.root, splitNode)
 		newRoot.update(&t.cfg.Config)
 		t.root = newRoot
 	}
-	replacedK, replacedV, replaced, _ = mut(t.cfg.np, &t.root).
-		insert(&t.cfg, item, value)
+	replacedK, replacedV, replaced, _ = mut(&t.cfg, &t.root).insert(&t.cfg, item, value)
 	if !replaced {
 		t.length++
 	}
 	return replacedK, replacedV, replaced
 }
 
-// MakeIter returns a new Iterator object. It is not safe to continue using an
+// Iterator returns a new Iterator object. It is not safe to continue using an
 // Iterator after modifications are made to the tree. If modifications are made,
 // create a new Iterator.
 func (t *Map[K, V, A]) Iterator() Iterator[K, V, A] {
@@ -161,12 +148,23 @@ func (t *Map[K, V, A]) Len() int {
 
 // Get returns the value associated with the requested key, if it exists.
 func (t *Map[K, V, A]) Get(k K) (v V, ok bool) {
-	it := t.Iterator()
-	it.SeekGE(k)
-	if it.Valid() && it.Compare(it.Cur(), k) == 0 {
-		return it.Value(), true
+	n := t.root
+	for n != nil {
+		i, found := n.find(t.cfg.cmp, k)
+		if found {
+			return n.entries[i].v, true
+		}
+		if n.IsLeaf() {
+			break
+		}
+		n = n.children[i]
 	}
 	return v, false
+}
+
+// Compare compares two keys using the Map's comparison function.
+func (t *Map[K, V, A]) Compare(a, b K) int {
+	return t.cfg.cmp(a, b)
 }
 
 // String returns a string description of the tree. The format is

@@ -12,7 +12,7 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package abstract
+package aug
 
 import (
 	"fmt"
@@ -51,19 +51,20 @@ func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, h
 	if r := atomic.LoadInt32(&n.ref); r < 1 {
 		return fmt.Errorf("node at depth %d has ref %d", depth, r)
 	}
-	if n.count < 0 || n.count > MaxEntries {
-		return fmt.Errorf("node at depth %d has count %d", depth, n.count)
+	count := len(n.entries)
+	if count > v.cfg.maxEntries {
+		return fmt.Errorf("node at depth %d has count %d > %d", depth, count, v.cfg.maxEntries)
 	}
-	if !isRoot && n.count < MinEntries {
-		return fmt.Errorf("non-root node at depth %d has count %d < %d", depth, n.count, MinEntries)
+	if !isRoot && count < v.cfg.minEntries {
+		return fmt.Errorf("non-root node at depth %d has count %d < %d", depth, count, v.cfg.minEntries)
 	}
-	if isRoot && n.count == 0 {
+	if isRoot && count == 0 {
 		return fmt.Errorf("root has count 0")
 	}
 	cmp := v.cfg.cmp
-	for i := int16(0); i < n.count; i++ {
-		k := n.keys[i]
-		if i > 0 && cmp(n.keys[i-1], k) >= 0 {
+	for i := range count {
+		k := n.entries[i].k
+		if i > 0 && cmp(n.entries[i-1].k, k) >= 0 {
 			return fmt.Errorf("node at depth %d keys out of order at %d", depth, i)
 		}
 		if lo != nil && cmp(*lo, k) >= 0 {
@@ -73,7 +74,7 @@ func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, h
 			return fmt.Errorf("node at depth %d key %d not below upper bound", depth, i)
 		}
 	}
-	v.items += int(n.count)
+	v.items += count
 	if n.IsLeaf() {
 		if v.leafDepth == -1 {
 			v.leafDepth = depth
@@ -81,26 +82,33 @@ func (v *verifier[K, V, A]) node(n *Node[K, V, A], depth int, isRoot bool, lo, h
 			return fmt.Errorf("leaf at depth %d, expected %d", depth, v.leafDepth)
 		}
 	} else {
-		for i := int16(0); i <= n.count; i++ {
-			c := n.children[i]
+		if len(n.children) != count+1 {
+			return fmt.Errorf("node at depth %d has %d children for %d entries", depth, len(n.children), count)
+		}
+		for i, c := range n.children {
 			if c == nil {
 				return fmt.Errorf("node at depth %d has nil child %d", depth, i)
 			}
 			clo, chi := lo, hi
 			if i > 0 {
-				clo = &n.keys[i-1]
+				clo = &n.entries[i-1].k
 			}
-			if i < n.count {
-				chi = &n.keys[i]
+			if i < count {
+				chi = &n.entries[i].k
 			}
 			if err := v.node(c, depth+1, false, clo, chi); err != nil {
 				return err
 			}
 		}
-		for i := int16(n.count + 1); i < MaxEntries+1; i++ {
-			if n.children[i] != nil {
-				return fmt.Errorf("node at depth %d has stale child pointer at %d", depth, i)
+		for i, c := range n.children[len(n.children):cap(n.children)] {
+			if c != nil {
+				return fmt.Errorf("node at depth %d has stale child pointer at %d", depth, len(n.children)+i)
 			}
+		}
+	}
+	for i, e := range n.entries[len(n.entries):cap(n.entries)] {
+		if !reflect.ValueOf(e).IsZero() {
+			return fmt.Errorf("node at depth %d has stale entry at %d", depth, len(n.entries)+i)
 		}
 	}
 	if v.cfg.Updater != nil {

@@ -1,12 +1,11 @@
-package abstract
+package aug
 
-// LowLevelIterator is exposed to developers within this module for use
-// implemented augmented search functionality.
+// LowLevelIterator exposes the structure of the tree to augmentation code
+// implementing custom search operations.
 type LowLevelIterator[K, V, A any] Iterator[K, V, A]
 
-// LowLevel converts an iterator to a LowLevelIterator. Given this package
-// is internal, callers outside of this module cannot construct a
-// LowLevelIterator.
+// LowLevel converts an iterator to a LowLevelIterator. The two share state:
+// operations on either are visible through the other.
 func LowLevel[K, V, A any](
 	it *Iterator[K, V, A],
 ) *LowLevelIterator[K, V, A] {

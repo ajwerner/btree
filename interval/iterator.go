@@ -18,11 +18,11 @@ package interval
 import (
 	"sort"
 
-	"github.com/ajwerner/btree/internal/abstract"
+	"github.com/ajwerner/btree/aug"
 )
 
 type Iterator[I, K, V any] struct {
-	abstract.Iterator[I, V, aug[K]]
+	aug.Iterator[I, V, subtreeBound[K]]
 
 	o overlapScan[I, K, V]
 }
@@ -76,12 +76,12 @@ type overlapScan[I, K, V any] struct {
 	set    bool
 
 	// The "soft" lower-bound constraint.
-	constrMinN       *abstract.Node[I, V, aug[K]]
+	constrMinN       *aug.Node[I, V, subtreeBound[K]]
 	constrMinPos     int16
 	constrMinReached bool
 
 	// The "hard" upper-bound constraint.
-	constrMaxN   *abstract.Node[I, V, aug[K]]
+	constrMaxN   *aug.Node[I, V, subtreeBound[K]]
 	constrMaxPos int16
 }
 
@@ -110,8 +110,8 @@ func (i *Iterator[I, K, V]) FirstOverlap(bounds I) {
 
 func lowLevel[I, K, V any](
 	it *Iterator[I, K, V],
-) *abstract.LowLevelIterator[I, V, aug[K]] {
-	return abstract.LowLevel(&it.Iterator)
+) *aug.LowLevelIterator[I, V, subtreeBound[K]] {
+	return aug.LowLevel(&it.Iterator)
 }
 
 func (i *Iterator[I, K, V]) Reset() {

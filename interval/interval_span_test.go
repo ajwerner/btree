@@ -25,8 +25,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ajwerner/btree/internal/abstract"
+	"github.com/ajwerner/btree/aug"
 )
+
+const maxEntries = 2*aug.DefaultDegree - 1
 
 type Key []byte
 
@@ -184,10 +186,10 @@ func (k Key) Compare(o Key) int {
 	return bytes.Compare(k, o)
 }
 
-type btree = Map[*latch, Key, struct{}]
+type btree = *Map[*latch, Key, struct{}]
 
 func makeBTree() btree {
-	return MakeMap[*latch, Key, struct{}](
+	return New[*latch, Key, struct{}](
 		Key.Compare,
 		compareLatches,
 		func(l *latch) Key { return l.span.key },
@@ -290,7 +292,7 @@ func TestBTreeSeek(t *testing.T) {
 
 func TestBTreeSeekOverlap(t *testing.T) {
 	const count = 513
-	const size = 2 * abstract.MaxEntries
+	const size = 2 * maxEntries
 
 	tr := makeBTree()
 	for i := range count {
@@ -425,8 +427,8 @@ func TestBTreeCloneConcurrentOperations(t *testing.T) {
 	const cloneTestSize = 1000
 	p := perm(cloneTestSize)
 
-	var trees []*btree
-	treeC, treeDone := make(chan *btree), make(chan struct{})
+	var trees []btree
+	treeC, treeDone := make(chan btree), make(chan struct{})
 	go func() {
 		for b := range treeC {
 			trees = append(trees, b)
@@ -435,16 +437,15 @@ func TestBTreeCloneConcurrentOperations(t *testing.T) {
 	}()
 
 	var wg sync.WaitGroup
-	var populate func(tr *btree, start int)
-	populate = func(tr *btree, start int) {
+	var populate func(tr btree, start int)
+	populate = func(tr btree, start int) {
 		t.Logf("Starting new clone at %v", start)
 		treeC <- tr
 		for i := start; i < cloneTestSize; i++ {
 			tr.Upsert(p[i], struct{}{})
 			if i%(cloneTestSize/5) == 0 {
 				wg.Add(1)
-				c := tr.Clone()
-				go populate(&c, i+1)
+				go populate(tr.Clone(), i+1)
 			}
 		}
 		wg.Done()
@@ -452,7 +453,7 @@ func TestBTreeCloneConcurrentOperations(t *testing.T) {
 
 	wg.Add(1)
 	tr := makeBTree()
-	go populate(&tr, 0)
+	go populate(tr, 0)
 	wg.Wait()
 	close(treeC)
 	<-treeDone
@@ -562,7 +563,7 @@ func BenchmarkBTreeDelete(b *testing.B) {
 				}
 			}
 			if tr.Len() > 0 {
-				b.Fatalf("tree not empty: %s", &tr)
+				b.Fatalf("tree not empty: %s", tr)
 			}
 		}
 	})
@@ -614,7 +615,7 @@ func BenchmarkBTreeDeleteInsertCloneEachTime(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					la := insertP[i%count]
 					if reset {
-						trReset.Reset()
+						trReset.Clear()
 						trReset = tr
 					}
 					tr = tr.Clone()
@@ -745,7 +746,7 @@ func BenchmarkBTreeIterNext(b *testing.B) {
 	tr := makeBTree()
 
 	const count = 8 << 10
-	const size = 2 * abstract.MaxEntries
+	const size = 2 * maxEntries
 	for i := range count {
 		la := newLatch(spanWithEnd(i, i+size+1))
 		tr.Upsert(la, struct{}{})
@@ -765,7 +766,7 @@ func BenchmarkBTreeIterPrev(b *testing.B) {
 	tr := makeBTree()
 
 	const count = 8 << 10
-	const size = 2 * abstract.MaxEntries
+	const size = 2 * maxEntries
 	for i := range count {
 		la := newLatch(spanWithEnd(i, i+size+1))
 		tr.Upsert(la, struct{}{})
@@ -785,7 +786,7 @@ func BenchmarkBTreeIterNextOverlap(b *testing.B) {
 	tr := makeBTree()
 
 	const count = 8 << 10
-	const size = 2 * abstract.MaxEntries
+	const size = 2 * maxEntries
 	for i := range count {
 		la := newLatch(spanWithEnd(i, i+size+1))
 		tr.Upsert(la, struct{}{})
@@ -807,7 +808,7 @@ func BenchmarkBTreeIterOverlapScan(b *testing.B) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	const count = 8 << 10
-	const size = 2 * abstract.MaxEntries
+	const size = 2 * maxEntries
 	for i := range count {
 		tr.Upsert(newLatch(spanWithEnd(i, i+size+1)), struct{}{})
 	}

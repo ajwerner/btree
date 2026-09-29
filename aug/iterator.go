@@ -13,9 +13,9 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package abstract
+package aug
 
-// Iterator is responsible for search and traversal within a AugBTree.
+// Iterator is responsible for search and traversal within a Map.
 type Iterator[K, V, A any] struct {
 	r *Map[K, V, A]
 	iterFrame[K, V, A]
@@ -53,7 +53,7 @@ func (i *Iterator[K, V, A]) SeekGE(key K) {
 			return
 		}
 		if i.node.IsLeaf() {
-			if i.pos == i.node.count {
+			if i.pos == i.node.Count() {
 				i.Next()
 			}
 			return
@@ -80,7 +80,7 @@ func (i *Iterator[K, V, A]) SeekLT(key K) {
 	}
 }
 
-// First seeks to the first key in the AugBTree.
+// First seeks to the first key in the Map.
 func (i *Iterator[K, V, A]) First() {
 	i.Reset()
 	i.pos = 0
@@ -94,7 +94,7 @@ func (i *Iterator[K, V, A]) First() {
 	i.pos = 0
 }
 
-// Last seeks to the last key in the AugBTree.
+// Last seeks to the last key in the Map.
 func (i *Iterator[K, V, A]) Last() {
 	i.Reset()
 	if i.node == nil {
@@ -102,10 +102,10 @@ func (i *Iterator[K, V, A]) Last() {
 	}
 	ll := i.lowLevel()
 	for !i.node.IsLeaf() {
-		i.pos = i.node.count
+		i.pos = i.node.Count()
 		ll.Descend()
 	}
-	i.pos = i.node.count - 1
+	i.pos = i.node.Count() - 1
 }
 
 // Next positions the Iterator to the key immediately following its current
@@ -118,15 +118,15 @@ func (i *Iterator[K, V, A]) Next() {
 	}
 	ll := i.lowLevel()
 	if i.node.IsLeaf() {
-		if i.pos < i.node.count {
+		if i.pos < i.node.Count() {
 			i.pos++
 		}
-		for i.pos >= i.node.count && i.s.len() > 0 {
+		for i.pos >= i.node.Count() && i.s.len() > 0 {
 			ll.Ascend()
 		}
 		return
 	}
-	if i.pos >= i.node.count {
+	if i.pos >= i.node.Count() {
 		// Past the end; stay there.
 		return
 	}
@@ -164,25 +164,25 @@ func (i *Iterator[K, V, A]) Prev() {
 	}
 	ll.Descend()
 	for !i.node.IsLeaf() {
-		i.pos = i.node.count
+		i.pos = i.node.Count()
 		ll.Descend()
 	}
-	i.pos = i.node.count - 1
+	i.pos = i.node.Count() - 1
 }
 
 // Valid returns whether the Iterator is positioned at a valid position.
 func (i *Iterator[K, V, A]) Valid() bool {
-	return i.node != nil && i.pos >= 0 && i.pos < i.node.count
+	return i.node != nil && i.pos >= 0 && i.pos < i.node.Count()
 }
 
 // Cur returns the key at the Iterator's current position. It is illegal
 // to call Key if the Iterator is not valid.
 func (i *Iterator[K, V, A]) Cur() K {
-	return i.node.keys[i.pos]
+	return i.node.entries[i.pos].k
 }
 
 // Value returns the value at the Iterator's current position. It is illegal
 // to call Value if the Iterator is not valid.
 func (i *Iterator[K, V, A]) Value() V {
-	return i.node.values[i.pos]
+	return i.node.entries[i.pos].v
 }

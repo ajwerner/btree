@@ -14,34 +14,33 @@
 
 package interval
 
-import "github.com/ajwerner/btree/internal/abstract"
+import "github.com/ajwerner/btree/aug"
 
-// Map is a ordered map from I to V where I is an interval. Its iterator
+// Map is an ordered map from I to V where I is an interval. Its iterator
 // provides efficient overlap queries.
 type Map[I, K, V any] struct {
-	abstract.Map[I, V, aug[K]]
+	*aug.Map[I, V, subtreeBound[K]]
 }
 
-type config[I, K any] struct {
-	getKey, getEndKey func(I) K
-	cmp               func(K, K) int
-}
-
-// MakeMap constructs a new map with the provided comparison functions
-// for intervals and for their bounds.
-func MakeMap[I, K, V any](
+// New constructs a Map with the provided comparison functions for
+// intervals and for their bounds. key and endKey extract the bounds of an
+// interval; hasEnd reports whether an interval has an end key, and may be
+// nil, in which case an interval whose end key is the zero K is treated as
+// a point. See aug.WithDegree and aug.WithFreeList for the options.
+func New[I, K, V any](
 	cmpK Cmp[K],
 	cmpI Cmp[I],
 	key, endKey func(I) K,
 	hasEnd func(I) bool,
-) Map[I, K, V] {
+	opts ...aug.Option,
+) *Map[I, K, V] {
 	if hasEnd == nil {
 		hasEnd = func(i I) bool {
 			return !isZero(cmpK, endKey(i))
 		}
 	}
-	return Map[I, K, V]{
-		Map: abstract.MakeMap[I, V, aug[K]](
+	return &Map[I, K, V]{
+		Map: aug.New[I, V, subtreeBound[K]](
 			cmpI,
 			&updater[I, K, V]{
 				cmp:    cmpK,
@@ -49,13 +48,14 @@ func MakeMap[I, K, V any](
 				end:    endKey,
 				hasEnd: hasEnd,
 			},
+			opts...,
 		),
 	}
 }
 
 // Clone clones the Map, lazily. It does so in constant time.
-func (m *Map[I, K, V]) Clone() Map[I, K, V] {
-	return Map[I, K, V]{Map: m.Map.Clone()}
+func (m *Map[I, K, V]) Clone() *Map[I, K, V] {
+	return &Map[I, K, V]{Map: m.Map.Clone()}
 }
 
 // Cmp is a comparison function for type T.
@@ -68,23 +68,24 @@ func (t *Map[I, K, V]) Iterator() Iterator[I, K, V] {
 	}
 }
 
-// Set is an ordered set with items of type T which additionally offers the
-// methods of an order-statistic tree on its iterator.
+// Set is an ordered set of intervals of type I with bounds of type T whose
+// iterator provides efficient overlap queries.
 type Set[I, T any] Map[I, T, struct{}]
 
-// MakeSet constructs a new Set with the provided comparison function.
-func MakeSet[I, T any](
+// NewSet constructs a Set with the provided comparison functions. See New.
+func NewSet[I, T any](
 	cmpT Cmp[T],
 	cmpI Cmp[I],
 	key, endKey func(I) T,
 	hasEnd func(I) bool,
-) Set[I, T] {
-	return (Set[I, T])(MakeMap[I, T, struct{}](cmpT, cmpI, key, endKey, hasEnd))
+	opts ...aug.Option,
+) *Set[I, T] {
+	return (*Set[I, T])(New[I, T, struct{}](cmpT, cmpI, key, endKey, hasEnd, opts...))
 }
 
 // Clone clones the Set, lazily. It does so in constant time.
-func (t *Set[I, T]) Clone() Set[I, T] {
-	return (Set[I, T])((*Map[I, T, struct{}])(t).Clone())
+func (t *Set[I, T]) Clone() *Set[I, T] {
+	return (*Set[I, T])((*Map[I, T, struct{}])(t).Clone())
 }
 
 // Upsert inserts or updates the provided item. It returns
@@ -94,11 +95,17 @@ func (t *Set[I, T]) Upsert(item I) (replaced I, overwrote bool) {
 	return replaced, overwrote
 }
 
-// Delete removes the value with the provided key. It returns true if the
-// item existed in the set.
+// Delete removes the provided item. It returns true if the item existed in
+// the set.
 func (t *Set[I, T]) Delete(item I) (removed bool) {
 	_, _, removed = t.Map.Delete(item)
 	return removed
+}
+
+// Contains returns true if the item exists in the set.
+func (t *Set[I, T]) Contains(item I) bool {
+	_, ok := t.Map.Get(item)
+	return ok
 }
 
 // Iterator constructs an iterator for this set.

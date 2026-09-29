@@ -12,7 +12,18 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package abstract
+package aug
+
+import "fmt"
+
+// DefaultDegree is the degree used by New when WithDegree is not given. A
+// tree of degree d holds between d-1 and 2d-1 entries in every node except
+// the root.
+const DefaultDegree = 16
+
+// DefaultFreeListSize is the capacity of the free list created by New when
+// WithFreeList is not given.
+const DefaultFreeListSize = 32
 
 // Config is used to configure the tree. It consists of a comparison function
 // for keys and any auxiliary data provided by the instantiator. It is provided
@@ -30,7 +41,7 @@ type Config[K, V, A any] struct {
 type Updater[K, V, A any] interface {
 
 	// Update should update the augmentation of the passed node, optionally
-	// using the data in the UpdataMeta to optimize the update. If the
+	// using the data in the UpdateInfo to optimize the update. If the
 	// augmentation changed, and thus, changes should occur in the ancestors
 	// of the subtree rooted at this node, return true.
 	Update(*Node[K, V, A], UpdateInfo[K, A]) (changed bool)
@@ -53,7 +64,7 @@ type UpdateInfo[K, A any] struct {
 }
 
 // Action is used to classify the type of Update in order to permit various
-// optimizations when updated the augmented state.
+// optimizations when updating the augmented state.
 type Action int
 
 const (
@@ -69,14 +80,14 @@ const (
 	// key to be moved into the parent.
 	Split
 
-	// Removal indicates that this is a removal event. If the RelevantNode is
-	// populated, it indicates a rebalance which caused the node rooted
-	// at that subtree to also be removed.
+	// Removal indicates that this is a removal event. If ModifiedOther is
+	// populated, it indicates a rebalance which caused the subtree with
+	// that augmentation to also be removed.
 	Removal
 
-	// Insertion indicates that this is a insertion event. If the RelevantNode is
-	// populated, it indicates a rebalance which caused the node rooted
-	// at that subtree to also be added.
+	// Insertion indicates that this is an insertion event. If ModifiedOther
+	// is populated, it indicates a rebalance which caused the subtree with
+	// that augmentation to also be added.
 	Insertion
 )
 
@@ -85,14 +96,65 @@ func (c *Config[K, V, A]) Compare(a, b K) int { return c.cmp(a, b) }
 
 type config[K, V, A any] struct {
 	Config[K, V, A]
-	np *nodePool[K, V, A]
+	fl         FreeList[K, V, A]
+	maxEntries int
+	minEntries int
+}
+
+// Option configures a Map at construction.
+type Option interface {
+	apply(*options)
+}
+
+type options struct {
+	degree   int
+	freeList any
+}
+
+type optionFunc func(*options)
+
+func (f optionFunc) apply(o *options) { f(o) }
+
+// WithDegree sets the degree of the tree. A tree of degree d holds between
+// d-1 and 2d-1 entries in every node except the root. The degree must be at
+// least 2. Smaller degrees copy less per write after a Clone; larger degrees
+// are shallower.
+func WithDegree(degree int) Option {
+	return optionFunc(func(o *options) { o.degree = degree })
+}
+
+// WithFreeList sets the free list from which the tree allocates nodes and to
+// which it returns them. The free list's type parameters must match those
+// of the Map being constructed, or New panics. A free list may be shared by
+// any number of trees, including trees of different degrees.
+func WithFreeList[K, V, A any](fl FreeList[K, V, A]) Option {
+	return optionFunc(func(o *options) { o.freeList = fl })
 }
 
 func makeConfig[K, V, A any](
-	cmp func(K, K) int, up Updater[K, V, A],
-) (c config[K, V, A]) {
-	c.Updater = up
-	c.cmp = cmp
-	c.np = getNodePool[K, V, A]()
-	return c
+	cmp func(K, K) int, up Updater[K, V, A], opts []Option,
+) config[K, V, A] {
+	o := options{degree: DefaultDegree}
+	for _, opt := range opts {
+		opt.apply(&o)
+	}
+	if o.degree < 2 {
+		panic(fmt.Sprintf("btree: degree must be at least 2, got %d", o.degree))
+	}
+	var fl FreeList[K, V, A]
+	if o.freeList != nil {
+		var ok bool
+		if fl, ok = o.freeList.(FreeList[K, V, A]); !ok {
+			var want FreeList[K, V, A]
+			panic(fmt.Sprintf("btree: WithFreeList: got %T, want %T", o.freeList, want))
+		}
+	} else {
+		fl = NewFreeList[K, V, A](DefaultFreeListSize)
+	}
+	return config[K, V, A]{
+		Config:     Config[K, V, A]{Updater: up, cmp: cmp},
+		fl:         fl,
+		maxEntries: 2*o.degree - 1,
+		minEntries: o.degree - 1,
+	}
 }

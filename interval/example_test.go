@@ -34,7 +34,7 @@ func (p pair[T]) first() T  { return p[0] }
 func (p pair[T]) second() T { return p[1] }
 
 func Example() {
-	m := interval.MakeSet(
+	m := interval.NewSet(
 		cmp.Compare[int],
 		pair[int].compare,
 		pair[int].first,

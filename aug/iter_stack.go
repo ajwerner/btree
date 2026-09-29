@@ -13,10 +13,10 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package abstract
+package aug
 
 // iterStack represents a stack of (node, pos) tuples, which captures
-// iteration state as an Iterator descends a AugBTree.
+// iteration state as an Iterator descends a Map.
 type iterStack[K, V, A any] struct {
 	a    iterStackArr[K, V, A]
 	aLen int16 // -1 when using s

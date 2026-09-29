@@ -12,25 +12,26 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
+// Package orderstat provides copy-on-write ordered maps and sets whose
+// iterators additionally support rank queries and seeking by rank.
 package orderstat
 
 import (
 	"fmt"
 
-	"github.com/ajwerner/btree/internal/abstract"
+	"github.com/ajwerner/btree/aug"
 )
 
-// Map is a ordered map from K to V which additionally offers the methods
-// of a order-statistic tree on its iterator.
+// Map is an ordered map from K to V which additionally offers the methods
+// of an order-statistic tree on its iterator.
 type Map[K, V any] struct {
-	abstract.Map[K, V, aug]
+	*aug.Map[K, V, stat]
 }
 
-// MakeMap constructs a new Map with the provided comparison function.
-func MakeMap[K, V any](cmp func(K, K) int) Map[K, V] {
-	return Map[K, V]{
-		Map: abstract.MakeMap[K, V, aug](cmp, &updater[K, V]{}),
-	}
+// New constructs a Map with the provided comparison function. See
+// aug.WithDegree and aug.WithFreeList for the options.
+func New[K, V any](cmp func(K, K) int, opts ...aug.Option) *Map[K, V] {
+	return &Map[K, V]{Map: aug.New[K, V, stat](cmp, updater[K, V]{}, opts...)}
 }
 
 // Iterator constructs a new Iterator for this Map.
@@ -39,22 +40,23 @@ func (t *Map[K, V]) Iterator() Iterator[K, V] {
 }
 
 // Clone clones the Map, lazily. It does so in constant time.
-func (t *Map[K, V]) Clone() Map[K, V] {
-	return Map[K, V]{Map: t.Map.Clone()}
+func (t *Map[K, V]) Clone() *Map[K, V] {
+	return &Map[K, V]{Map: t.Map.Clone()}
 }
 
 // Set is an ordered set with items of type T which additionally offers the
 // methods of an order-statistic tree on its iterator.
 type Set[T any] Map[T, struct{}]
 
-// MakeSet constructs a new Set with the provided comparison function.
-func MakeSet[T any](cmp func(T, T) int) Set[T] {
-	return (Set[T])(MakeMap[T, struct{}](cmp))
+// NewSet constructs a Set with the provided comparison function. See
+// aug.WithDegree and aug.WithFreeList for the options.
+func NewSet[T any](cmp func(T, T) int, opts ...aug.Option) *Set[T] {
+	return (*Set[T])(New[T, struct{}](cmp, opts...))
 }
 
 // Clone clones the Set, lazily. It does so in constant time.
-func (t *Set[T]) Clone() Set[T] {
-	return (Set[T])((*Map[T, struct{}])(t).Clone())
+func (t *Set[T]) Clone() *Set[T] {
+	return (*Set[T])((*Map[T, struct{}])(t).Clone())
 }
 
 // Upsert inserts or updates the provided item. It returns
@@ -64,57 +66,70 @@ func (t *Set[T]) Upsert(item T) (replaced T, overwrote bool) {
 	return replaced, overwrote
 }
 
-// Delete removes the value with the provided key. It returns true if the
-// item existed in the set.
-func (t *Set[K]) Delete(item K) (removed bool) {
+// Delete removes the provided item. It returns true if the item existed in
+// the set.
+func (t *Set[T]) Delete(item T) (removed bool) {
 	_, _, removed = t.Map.Delete(item)
 	return removed
 }
 
-// Iterator constructs an iterator for this set.
-func (t *Set[K]) Iterator() Iterator[K, struct{}] {
-	return (*Map[K, struct{}])(t).Iterator()
+// Contains returns true if the item exists in the set.
+func (t *Set[T]) Contains(item T) bool {
+	_, ok := t.Map.Get(item)
+	return ok
 }
 
-type aug struct {
-	// children is the number of items rooted at the current subtree.
-	children int
+// Iterator constructs an iterator for this set.
+func (t *Set[T]) Iterator() Iterator[T, struct{}] {
+	return (*Map[T, struct{}])(t).Iterator()
+}
+
+// FreeList recycles nodes between orderstat Maps and Sets with the same key
+// and value types.
+type FreeList[K, V any] = aug.FreeList[K, V, stat]
+
+// NewFreeList returns a FreeList that retains up to size nodes. See
+// aug.NewFreeList.
+func NewFreeList[K, V any](size int) FreeList[K, V] {
+	return aug.NewFreeList[K, V, stat](size)
+}
+
+// stat is the augmentation: the number of items in the subtree.
+type stat struct {
+	count int
 }
 
 type updater[K, V any] struct{}
 
 func (u updater[K, V]) Update(
-	n *abstract.Node[K, V, aug],
-	md abstract.UpdateInfo[K, aug],
+	n *aug.Node[K, V, stat],
+	md aug.UpdateInfo[K, stat],
 ) (updated bool) {
 	a := n.GetA()
 	switch md.Action {
-	case abstract.Removal, abstract.Split:
-		a.children--
+	case aug.Removal, aug.Split:
+		a.count--
 		if md.ModifiedOther != nil {
-			a.children -= md.ModifiedOther.children
+			a.count -= md.ModifiedOther.count
 		}
 		return true
-	case abstract.Insertion:
-		a.children++
+	case aug.Insertion:
+		a.count++
 		if md.ModifiedOther != nil {
-			a.children += md.ModifiedOther.children
+			a.count += md.ModifiedOther.count
 		}
 		return true
-	case abstract.Default:
-		orig := a.children
-		var children int
+	case aug.Default:
+		orig := a.count
+		var count int
 		if !n.IsLeaf() {
-			N := n.Count()
-			for i := int16(0); i <= N; i++ {
-				if child := n.GetChild(i); child != nil {
-					children += child.children
-				}
+			for i := int16(0); i <= n.Count(); i++ {
+				count += n.GetChild(i).count
 			}
 		}
-		children += int(n.Count())
-		a.children = children
-		return a.children != orig
+		count += int(n.Count())
+		a.count = count
+		return a.count != orig
 	default:
 		panic(fmt.Errorf("unknown action %v", md.Action))
 	}
@@ -124,7 +139,7 @@ func (u updater[K, V]) Update(
 // iterator methods, plus it offers Rank() and SeekNth() which allow efficient
 // rank operations.
 type Iterator[K, V any] struct {
-	abstract.Iterator[K, V, aug]
+	aug.Iterator[K, V, stat]
 }
 
 // Rank returns the rank of the current iterator position, i.e. the number
@@ -140,8 +155,8 @@ func (it *Iterator[K, V]) Rank() int {
 	var before int
 	for d, depth := 0, ll.Depth(); d < depth; d++ {
 		n, pos := ll.Frame(d)
-		for i := range pos {
-			before += n.GetChild(i).children
+		for i := int16(0); i < pos; i++ {
+			before += n.GetChild(i).count
 		}
 		before += int(pos)
 	}
@@ -151,7 +166,7 @@ func (it *Iterator[K, V]) Rank() int {
 	n, pos := ll.Node(), ll.Pos()
 	if !n.IsLeaf() {
 		for i := int16(0); i <= pos; i++ {
-			before += n.GetChild(i).children
+			before += n.GetChild(i).count
 		}
 	}
 	before += int(pos)
@@ -159,33 +174,30 @@ func (it *Iterator[K, V]) Rank() int {
 }
 
 // SeekNth seeks the iterator to the nth item in the collection (0-indexed).
+// If nth is out of range the iterator is left invalid.
 func (it *Iterator[K, V]) SeekNth(nth int) {
 	it.Reset()
-	// Reset has bizarre semantics in that it initializes the iterator to
-	// an invalid position (-1) at the root of the tree. IncrementPos moves it
-	// to the first child and item of the
 	ll := lowLevel(it)
+	if ll.Node() == nil || nth < 0 || nth >= ll.Node().GetA().count {
+		return
+	}
+	// Reset leaves the iterator at position -1 in the root. IncrementPos
+	// moves it to the first child and item.
 	ll.IncrementPos()
 	n := 0
 	for n <= nth {
 		if ll.IsLeaf() {
 			// If we're in the leaf, then, by construction, we can find
 			// the relevant position and seek to it in constant time.
-			//
-			// TODO(ajwerner): Add more invariant checking.
 			ll.SetPos(int16(nth - n))
 			return
 		}
 		a := ll.Child()
-		if a == nil {
-			onErrorf("failed to visit child")
-		}
-		if n+a.children > nth {
+		if n+a.count > nth {
 			ll.Descend()
 			continue
 		}
-
-		n += a.children
+		n += a.count
 		switch {
 		case n < nth:
 			// Consume the current value, move on to the next one.
@@ -194,17 +206,13 @@ func (it *Iterator[K, V]) SeekNth(nth int) {
 		case n == nth:
 			return // found it
 		default:
-			onErrorf("invariant violated")
+			panic("orderstat: invariant violated")
 		}
 	}
 }
 
 func lowLevel[K, V any](
 	it *Iterator[K, V],
-) *abstract.LowLevelIterator[K, V, aug] {
-	return abstract.LowLevel(&it.Iterator)
-}
-
-var onErrorf = func(format string, args ...any) {
-	panic(fmt.Errorf(format, args...))
+) *aug.LowLevelIterator[K, V, stat] {
+	return aug.LowLevel(&it.Iterator)
 }

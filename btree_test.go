@@ -16,13 +16,14 @@ package btree
 
 import (
 	"cmp"
+	"fmt"
 	"math/rand/v2"
 	"slices"
 	"testing"
 )
 
 func TestBTree(t *testing.T) {
-	tree := MakeSet(cmp.Compare[int])
+	tree := NewSet(cmp.Compare[int])
 	tree.Upsert(2)
 	tree.Upsert(12)
 	tree.Upsert(1)
@@ -125,6 +126,14 @@ func checkMap(t *testing.T, tag string, m *Map[int, int], r *model, rng *rand.Ra
 // TestDifferential drives a Map and a set of clones against a reference
 // model with interleaved Upsert, Delete, Clone and Reset operations.
 func TestDifferential(t *testing.T) {
+	for _, degree := range []int{2, 3, 5, 16, 64} {
+		t.Run(fmt.Sprintf("degree=%d", degree), func(t *testing.T) {
+			testDifferential(t, degree)
+		})
+	}
+}
+
+func testDifferential(t *testing.T, degree int) {
 	seed := rand.Uint64()
 	t.Logf("seed %d", seed)
 	rng := rand.New(rand.NewPCG(seed, 0))
@@ -133,8 +142,8 @@ func TestDifferential(t *testing.T) {
 		m *Map[int, int]
 		r *model
 	}
-	base := MakeMap[int, int](cmp.Compare[int])
-	trees := []tree{{&base, &model{m: map[int]int{}}}}
+	base := New[int, int](cmp.Compare[int], WithDegree(degree))
+	trees := []tree{{base, &model{m: map[int]int{}}}}
 	const steps = 20000
 	for step := range steps {
 		tr := &trees[rng.IntN(len(trees))]
@@ -156,13 +165,12 @@ func TestDifferential(t *testing.T) {
 			delete(tr.r.m, k)
 		case op < 97:
 			if len(trees) < 8 {
-				c := tr.m.Clone()
-				trees = append(trees, tree{&c, tr.r.clone()})
+				trees = append(trees, tree{tr.m.Clone(), tr.r.clone()})
 			}
 		default:
 			if len(trees) > 1 {
 				idx := rng.IntN(len(trees))
-				trees[idx].m.Reset()
+				trees[idx].m.Clear()
 				trees = slices.Delete(trees, idx, idx+1)
 			}
 		}
@@ -175,8 +183,16 @@ func TestDifferential(t *testing.T) {
 }
 
 func TestIteratorEdges(t *testing.T) {
-	for _, n := range []int{0, 1, 10, 1000, 40000} {
-		s := MakeSet(cmp.Compare[int])
+	for _, degree := range []int{2, 16} {
+		for _, n := range []int{0, 1, 10, 1000, 40000} {
+			testIteratorEdges(t, degree, n)
+		}
+	}
+}
+
+func testIteratorEdges(t *testing.T, degree, n int) {
+	{
+		s := NewSet(cmp.Compare[int], WithDegree(degree))
 		for i := range n {
 			s.Upsert(i)
 		}
@@ -192,7 +208,7 @@ func TestIteratorEdges(t *testing.T) {
 			if it.Valid() {
 				t.Fatalf("n=%d: Next on empty is valid", n)
 			}
-			continue
+			return
 		}
 		if !it.Valid() || it.Cur() != 0 {
 			t.Fatalf("n=%d: Next after reset gives %v %d", n, it.Valid(), it.Cur())
@@ -241,7 +257,7 @@ func TestIteratorEdges(t *testing.T) {
 }
 
 func TestCloneIsolation(t *testing.T) {
-	m := MakeMap[int, string](cmp.Compare[int])
+	m := New[int, string](cmp.Compare[int])
 	for i := range 5000 {
 		m.Upsert(i, "orig")
 	}
@@ -271,14 +287,14 @@ func TestCloneIsolation(t *testing.T) {
 			}
 		}
 	}
-	m.Reset()
+	m.Clear()
 	if err := c.Verify(); err != nil {
 		t.Fatal(err)
 	}
 	if c.Len() != 4999 {
 		t.Fatalf("clone len %d", c.Len())
 	}
-	c.Reset()
+	c.Clear()
 	if c.Len() != 0 || m.Len() != 0 {
 		t.Fatal("reset did not empty")
 	}
@@ -294,8 +310,13 @@ func FuzzMap(f *testing.F) {
 			m *Map[int, int]
 			r *model
 		}
-		base := MakeMap[int, int](cmp.Compare[int])
-		trees := []tree{{&base, &model{m: map[int]int{}}}}
+		if len(script) == 0 {
+			return
+		}
+		degree := 2 + int(script[0]%8)
+		script = script[1:]
+		base := New[int, int](cmp.Compare[int], WithDegree(degree))
+		trees := []tree{{base, &model{m: map[int]int{}}}}
 		rng := rand.New(rand.NewPCG(uint64(len(script)), 1))
 		for i := 0; i+1 < len(script); i += 2 {
 			op, k := script[i], int(script[i+1])
@@ -309,13 +330,12 @@ func FuzzMap(f *testing.F) {
 				delete(tr.r.m, k)
 			case 2:
 				if len(trees) < 4 {
-					c := tr.m.Clone()
-					trees = append(trees, tree{&c, tr.r.clone()})
+					trees = append(trees, tree{tr.m.Clone(), tr.r.clone()})
 				}
 			case 3:
 				if len(trees) > 1 {
 					idx := k % len(trees)
-					trees[idx].m.Reset()
+					trees[idx].m.Clear()
 					trees = slices.Delete(trees, idx, idx+1)
 				}
 			}

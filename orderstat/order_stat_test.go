@@ -20,10 +20,12 @@ import (
 	"math/rand/v2"
 	"slices"
 	"testing"
+
+	"github.com/ajwerner/btree/aug"
 )
 
 func TestOrderStatTree(t *testing.T) {
-	tree := MakeMap[int, int](cmp.Compare[int])
+	tree := New[int, int](cmp.Compare[int])
 	tree.Upsert(2, 1)
 	tree.Upsert(3, 2)
 	tree.Upsert(5, 4)
@@ -41,7 +43,7 @@ func TestOrderStatTree(t *testing.T) {
 
 func TestOrderStatNth(t *testing.T) {
 	t.Parallel()
-	tree := MakeSet(cmp.Compare[int])
+	tree := NewSet(cmp.Compare[int])
 	const maxN = 1000
 	N := rand.IntN(maxN)
 	items := make([]int, 0, N)
@@ -82,13 +84,13 @@ func TestOrderStatNth(t *testing.T) {
 	}
 
 	clone := tree.Clone()
-	clone.Reset()
+	clone.Clear()
 	requireEqual(t, len(perm), tree.Len())
 
 }
 
 func Example_blog() {
-	s := MakeSet(cmp.Compare[int])
+	s := NewSet(cmp.Compare[int])
 	for _, i := range rand.Perm(100) {
 		s.Upsert(i)
 	}
@@ -113,9 +115,20 @@ func requireEqual[T comparable](t *testing.T, exp, got T) {
 // slice for trees of height 1, 2 and 3. At the current degree the tree is
 // height 2 up to roughly 16k items and height 3 beyond that.
 func TestRankAndSeekNthAtEveryHeight(t *testing.T) {
+	for _, degree := range []int{2, 4, 16} {
+		t.Run(fmt.Sprintf("degree=%d", degree), func(t *testing.T) {
+			testRankAndSeekNth(t, degree)
+		})
+	}
+}
+
+func testRankAndSeekNth(t *testing.T, degree int) {
 	rng := rand.New(rand.NewPCG(11, 13))
 	for _, n := range []int{1, 50, 200, 5000, 20000, 300000} {
-		s := MakeSet(cmp.Compare[int])
+		if degree == 2 && n > 20000 {
+			break
+		}
+		s := NewSet(cmp.Compare[int], aug.WithDegree(degree))
 		keys := make([]int, n)
 		for i := range keys {
 			keys[i] = i * 3
@@ -162,6 +175,14 @@ func TestRankAndSeekNthAtEveryHeight(t *testing.T) {
 		if n >= 20000 && height < 3 {
 			t.Fatalf("n=%d: expected height >= 3, got %d", n, height)
 		}
+		it.SeekNth(n)
+		if it.Valid() {
+			t.Fatalf("n=%d: SeekNth(n) is valid", n)
+		}
+		it.SeekNth(-1)
+		if it.Valid() {
+			t.Fatalf("n=%d: SeekNth(-1) is valid", n)
+		}
 	}
 }
 
@@ -171,9 +192,9 @@ func TestOrderStatDifferential(t *testing.T) {
 	seed := rand.Uint64()
 	t.Logf("seed %d", seed)
 	rng := rand.New(rand.NewPCG(seed, 0))
-	m := MakeMap[int, int](cmp.Compare[int])
+	m := New[int, int](cmp.Compare[int])
 	ref := map[int]int{}
-	var clones []Map[int, int]
+	var clones []*Map[int, int]
 	var cloneRefs []map[int]int
 	check := func(m *Map[int, int], ref map[int]int) {
 		t.Helper()
@@ -224,19 +245,19 @@ func TestOrderStatDifferential(t *testing.T) {
 			}
 		}
 		if step%2000 == 1999 {
-			check(&m, ref)
+			check(m, ref)
 			for i := range clones {
 				for j := 0; j < 50; j++ {
 					k := rng.IntN(30000)
 					clones[i].Upsert(k, -j)
 					cloneRefs[i][k] = -j
 				}
-				check(&clones[i], cloneRefs[i])
+				check(clones[i], cloneRefs[i])
 			}
 		}
 	}
 	for i := range clones {
-		clones[i].Reset()
+		clones[i].Clear()
 	}
-	check(&m, ref)
+	check(m, ref)
 }

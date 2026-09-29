@@ -15,9 +15,9 @@
 
 package interval
 
-import "github.com/ajwerner/btree/internal/abstract"
+import "github.com/ajwerner/btree/aug"
 
-type aug[K any] struct {
+type subtreeBound[K any] struct {
 	keyBound[K]
 }
 
@@ -28,12 +28,12 @@ type updater[I, K, V any] struct {
 }
 
 func (u *updater[I, K, V]) Update(
-	n *abstract.Node[I, V, aug[K]],
-	md abstract.UpdateInfo[I, aug[K]],
+	n *aug.Node[I, V, subtreeBound[K]],
+	md aug.UpdateInfo[I, subtreeBound[K]],
 ) (updated bool) {
 	a := n.GetA()
 	switch md.Action {
-	case abstract.Insertion:
+	case aug.Insertion:
 		up := u.upperBound(md.RelevantKey)
 		if child := md.ModifiedOther; child != nil {
 			if up.compare(u.cmp, child.keyBound) < 0 {
@@ -45,7 +45,7 @@ func (u *updater[I, K, V]) Update(
 			return true
 		}
 		return false
-	case abstract.Removal:
+	case aug.Removal:
 		up := u.upperBound(md.RelevantKey)
 		if child := md.ModifiedOther; child != nil {
 			if up.compare(u.cmp, child.keyBound) < 0 {
@@ -57,13 +57,13 @@ func (u *updater[I, K, V]) Update(
 			return a.compare(u.cmp, up) != 0
 		}
 		return false
-	case abstract.Split:
+	case aug.Split:
 		if a.compare(u.cmp, md.ModifiedOther.keyBound) != 0 &&
 			a.compare(u.cmp, u.upperBound(md.RelevantKey)) != 0 {
 			return false
 		}
 		fallthrough
-	case abstract.Default:
+	case aug.Default:
 		prev := a.keyBound
 		a.keyBound = u.findUpperBound(n)
 		return a.compare(u.cmp, prev) != 0
@@ -89,7 +89,7 @@ func isZero[K any](cmp Cmp[K], k K) bool {
 	return cmp(k, z) == 0
 }
 
-func (up *updater[I, K, V]) findUpperBound(n *abstract.Node[I, V, aug[K]]) keyBound[K] {
+func (up *updater[I, K, V]) findUpperBound(n *aug.Node[I, V, subtreeBound[K]]) keyBound[K] {
 	var max keyBound[K]
 	var setMax bool
 	for i, cnt := int16(0), n.Count(); i < cnt; i++ {
